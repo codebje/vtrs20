@@ -1,0 +1,9 @@
+[package]
+name = "vtrs80"
+version = "0.1.0"
+authors = ["Byron Ellacott <code@bje.id.au>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
