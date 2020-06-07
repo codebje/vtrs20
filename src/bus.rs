@@ -27,14 +27,19 @@ impl Bus {
     pub fn mem_read(&mut self, address: u32) -> u8 {
         for peripheral in &self.peripherals {
             match peripheral.mem_read(address) {
-                Some(data) => return data,
+                Some(data) => {
+                    println!("mem_read({}) = {}", address, data);
+                    return data;
+                }
                 None => (),
             }
         }
+        println!("mem_read({}) not found", address);
         255
     }
 
     pub fn mem_write(&mut self, address: u32, data: u8) {
+        println!("mem_write({}) = {}", address, data);
         for peripheral in &self.peripherals {
             peripheral.mem_write(address, data);
         }
@@ -51,6 +56,7 @@ impl Bus {
     }
 
     pub fn io_write(&mut self, address: u16, data: u8) {
+        println!("io_write({}) = {}", address, data);
         for peripheral in &self.peripherals {
             peripheral.io_write(address, data);
         }

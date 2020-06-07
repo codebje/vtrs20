@@ -4,6 +4,14 @@ use std::rc::Rc;
 use crate::bus::Bus;
 use crate::types::Peripheral;
 
+// instruction set
+mod alu;
+mod ctrl;
+mod iops;
+mod ld_8bit;
+mod special;
+
+// peripherals
 mod mmu;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -164,21 +172,49 @@ impl CPU {
 
         // decode the instruction
         match opcode {
+            0b00_000_000 => self.nop(),
             x if x & 0b11_111_000 == 0b10_000_000 => self.add_a_g(bus, x & 0b00_000_111),
             x if x & 0b11_000_111 == 0b00_000_110 => self.ld_g_m(bus, (x & 0b00_111_000) >> 3),
+            0b11_101_101 => self.extended(bus),
+            0b11_000_011 => self.jp(bus),
             _ => self.error(),
         }
-
-        self.mode = Mode::Reset;
     }
 
-    // Execute ADD A,g or ADD A,(HL)
-    fn add_a_g(&mut self, bus: &mut Bus, g: u8) {
-        println!("g = {}", g);
+    fn load_g_hl(&mut self, bus: &mut Bus, g: u8) -> Result<u8, ()> {
+        match g {
+            0b000 => Ok(((self.gr.bc & 0xff00) >> 8) as u8),
+            0b001 => Ok((self.gr.bc & 0x00ff) as u8),
+            0b010 => Ok(((self.gr.de & 0xff00) >> 8) as u8),
+            0b011 => Ok((self.gr.de & 0x00ff) as u8),
+            0b100 => Ok(((self.gr.hl & 0xff00) >> 8) as u8),
+            0b101 => Ok((self.gr.hl & 0x00ff) as u8),
+            0b110 => Ok(bus.mem_read(self.mmu.to_physical(self.gr.hl))),
+            0b111 => Ok(self.gr.a),
+            _ => Err(self.error()),
+        }
     }
 
-    fn ld_g_m(&mut self, bus: &mut Bus, g: u8) {
-        let imm = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
-        println!("g = {}, imm = {}", g, imm);
+    fn store_g_hl(&mut self, bus: &mut Bus, g: u8, v: u8) {
+        match g {
+            0b000 => self.gr.bc = (self.gr.bc & 0x00ff) | ((v as u16) << 8),
+            0b001 => self.gr.bc = (self.gr.bc & 0xff00) | (v as u16),
+            0b010 => self.gr.de = (self.gr.de & 0x00ff) | ((v as u16) << 8),
+            0b011 => self.gr.de = (self.gr.de & 0xff00) | (v as u16),
+            0b100 => self.gr.hl = (self.gr.hl & 0x00ff) | ((v as u16) << 8),
+            0b101 => self.gr.hl = (self.gr.hl & 0xff00) | (v as u16),
+            0b110 => bus.mem_write(self.mmu.to_physical(self.gr.hl), v),
+            0b111 => self.gr.a = v,
+            _ => self.error(),
+        }
+    }
+
+    // Extended instructions
+    fn extended(&mut self, bus: &mut Bus) {
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
+        match opcode {
+            x if x & 0b11_000_111 == 0b00_000_001 => self.out0(bus, (x & 0b00_111_000) >> 3),
+            _ => self.error(),
+        }
     }
 }
