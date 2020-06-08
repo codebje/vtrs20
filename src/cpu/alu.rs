@@ -34,6 +34,7 @@ impl CPU {
                 let result = self.gr.a as u16 + reg as u16;
                 self.gr.f = CPU::add_flags(self.gr.a as u16, reg as u16, result);
                 self.gr.a = result as u8;
+                self.sr.pc += 1;
             }
             _ => self.error(),
         }
@@ -45,20 +46,57 @@ mod alu_test {
     use std::rc::Rc;
 
     use crate::bus::Bus;
-    use crate::cpu::CPU;
+    use crate::cpu::{Flags, Register, CPU};
     use crate::rom::ROM;
 
     #[test]
     fn adder_flags() {
         let mut bus = Bus::new();
         let mut cpu = CPU::new(&mut bus);
-        let rom = ROM::new(0x80000, vec![0x3e, 0x70, 0x06, 0x30, 0x80]);
+        let rom = ROM::new(
+            0x80000,
+            vec![
+                0x3e, 0x70, // ld a, 112
+                0x06, 0x30, // ld b, 48
+                0x80, // add a, b
+                0x0e, 0x08, // ld c, 8
+                0x81, // add a, c
+                0x81, // add a, c
+                0x81, // add a, c
+            ],
+        );
         bus.add(Rc::new(rom));
         cpu.reset();
+
         cpu.cycle(&mut bus);
+        assert_eq!(cpu.reg(Register::A), 112);
+
         cpu.cycle(&mut bus);
+        assert_eq!(cpu.reg(Register::B), 48);
+
         cpu.cycle(&mut bus);
-        // 112+48=160, Sz-h-Vnc
-        assert_eq!(cpu.gr.f & 0b11010111, 0b1000_0100);
+        assert_eq!(cpu.reg(Register::A), 160); // 112+48=160
+        assert_eq!(cpu.flags(), Flags::SF | Flags::VF); // Sz-h-Vnc: signed, overflowed
+
+        cpu.cycle(&mut bus);
+        assert_eq!(cpu.reg(Register::C), 8);
+
+        cpu.cycle(&mut bus);
+        assert_eq!(cpu.reg(Register::A), 168); // 160+8=168
+        assert_eq!(cpu.flags(), Flags::SF); // Sz-h-vnc: signed
+
+        cpu.cycle(&mut bus);
+        assert_eq!(cpu.reg(Register::A), 176); // 168+8=176
+                                               //   0b1010_1000
+                                               // + 0b0000_1000
+                                               // = 0b1011_0000  (SF | HF)
+        assert_eq!(cpu.flags(), Flags::SF | Flags::HF); // Sz-H-vnc: signed, half-carry
+
+        cpu.cycle(&mut bus);
+        assert_eq!(cpu.reg(Register::A), 184); // 176+8=184
+                                               //   0b1011_0000
+                                               // + 0b0000_1000
+                                               // = 0b1011_1000 (SF)
+        assert_eq!(cpu.flags(), Flags::SF); // Sz-h-vnc: signed
     }
 }

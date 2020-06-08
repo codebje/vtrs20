@@ -4,6 +4,9 @@ use std::rc::Rc;
 use crate::bus::Bus;
 use crate::types::Peripheral;
 
+// enums
+pub mod enums;
+
 // instruction set
 mod alu;
 mod ctrl;
@@ -13,6 +16,8 @@ mod special;
 
 // peripherals
 mod mmu;
+
+use enums::*;
 
 #[derive(Debug, Eq, PartialEq)]
 #[allow(dead_code)]
@@ -145,6 +150,34 @@ impl CPU {
 
         // reset own peripherals
         self.mmu.reset();
+    }
+
+    // Return the CPU flags
+    pub fn flags(&self) -> Flags {
+        Flags::from_bits_truncate(self.gr.f)
+    }
+
+    // Return a register value. Always returns a u16, as Rust doesn't have dependent types.
+    pub fn reg(&self, reg: Register) -> u16 {
+        match reg {
+            Register::A => self.gr.a as u16,
+            Register::F => self.gr.f as u16,
+            Register::B => self.gr.bc >> 8,
+            Register::C => self.gr.bc & 0xff,
+            Register::D => self.gr.de >> 8,
+            Register::E => self.gr.de & 0xff,
+            Register::H => self.gr.hl >> 8,
+            Register::L => self.gr.hl & 0xff,
+            Register::BC => self.gr.bc,
+            Register::DE => self.gr.de,
+            Register::HL => self.gr.hl,
+            Register::I => self.sr.i as u16,
+            Register::R => self.sr.r as u16,
+            Register::IX => self.sr.ix,
+            Register::IY => self.sr.iy,
+            Register::SP => self.sr.sp,
+            Register::PC => self.sr.pc,
+        }
     }
 
     // Run one machine cycle. This will assert various signals on the bus to do its job.
