@@ -13,7 +13,6 @@ impl CPU {
         let n = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
         let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 2));
         let addr = n as u16 | (m as u16) << 8;
-        println!("jump to {}", addr);
         self.sr.pc = addr;
     }
 }

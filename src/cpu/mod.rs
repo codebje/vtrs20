@@ -11,6 +11,7 @@ pub mod enums;
 mod alu;
 mod ctrl;
 mod iops;
+mod ld_16bit;
 mod ld_8bit;
 mod special;
 
@@ -182,7 +183,6 @@ impl CPU {
 
     // Run one machine cycle. This will assert various signals on the bus to do its job.
     pub fn cycle(&mut self, bus: &mut Bus) {
-        println!("Executing {:?} machine cyle", self.mode);
         // check for: interrupt, DMA, ...?
         match self.mode {
             Mode::Reset => (),
@@ -201,11 +201,10 @@ impl CPU {
     fn fetch_opcode(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
 
-        println!("Opcode: {}", opcode);
-
         // decode the instruction
         match opcode {
             0b00_000_000 => self.nop(),
+            x if x & 0b11_001_111 == 0b00_000_001 => self.ld_ww_mn(bus, (x & 0b00_110_000) >> 4),
             x if x & 0b11_111_000 == 0b10_000_000 => self.add_a_g(bus, x & 0b00_000_111),
             x if x & 0b11_000_111 == 0b00_000_110 => self.ld_g_m(bus, (x & 0b00_111_000) >> 3),
             0b11_101_101 => self.extended(bus),
