@@ -1,3 +1,5 @@
+use std::convert::From;
+
 #[derive(Debug, Eq, PartialEq)]
 #[allow(dead_code)]
 pub enum Register {
@@ -33,4 +35,50 @@ bitflags! {
         const SF = 0b1000_0000;     // signed
     }
 
+}
+
+// `ggg` bitfield register decode, 0b110 excluded
+pub(super) enum RegG {
+    B = 0b000,
+    C = 0b001,
+    D = 0b010,
+    E = 0b011,
+    H = 0b100,
+    L = 0b101,
+    A = 0b111,
+}
+
+// `ggg` bitfield register decode, plus 0b110 = HL
+#[derive(Copy, Clone)]
+pub(super) enum RegGHL {
+    B = 0b000,
+    C = 0b001,
+    D = 0b010,
+    E = 0b011,
+    H = 0b100,
+    L = 0b101,
+    HL = 0b110,
+    A = 0b111,
+}
+
+impl From<RegG> for RegGHL {
+    fn from(reg: RegG) -> RegGHL {
+        match reg {
+            RegG::B => RegGHL::B,
+            RegG::C => RegGHL::C,
+            RegG::D => RegGHL::D,
+            RegG::E => RegGHL::E,
+            RegG::H => RegGHL::H,
+            RegG::L => RegGHL::L,
+            RegG::A => RegGHL::A,
+        }
+    }
+}
+
+// `ww` bitfield register decode
+pub(super) enum RegW {
+    BC = 0b00,
+    DE = 0b01,
+    HL = 0b10,
+    SP = 0b11,
 }

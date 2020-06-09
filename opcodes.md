@@ -1,12 +1,16 @@
 # Z180 Opcode table
 
+NYI - treated as invalid opcode
+Some - partially implemented, not fully written or not fully tested
+Done - completely implemented and fully tested
+
 |    opcode    |   opcode 1   |   opcode 2   |   opcode 3   | operation          | `SZHPNC` | Status |
 | ------------ | ------------ | ------------ | ------------ | ------------------ | -------- | ------ |
 | `00_000_000` |              |              |              | NOP                | `······` |  Done  |
-| `00_ww0_001` | `n`          | `m`          |              | LD ww, mn          | `······` |  Some  |
-| `00_000_010` |              |              |              | LD (BC), A         | `······` |  NYI   |
+| `00_ww0_001` | `n`          | `m`          |              | LD ww, mn          | `······` |  Done  |
+| `00_000_010` |              |              |              | LD (BC), A         | `······` |  Done  |
 | `00_ww0_011` |              |              |              | INC ww             | `······` |  NYI   |
-| `00_ggg_100` |              |              |              | INC g              | `↑↑↑VR·` |  NYI   |
+| `00_ggg_100` |              |              |              | INC g              | `↑↑↑VR·` |  Done  |
 | `00_ggg_101` |              |              |              | DEC g              | `↑↑↑VS·` |  NYI   |
 | `00_ggg_110` | `m`          |              |              | LD g, m            | `······` |  Done  |
 | `00_110_110` | `m`          |              |              | LD (HL), m         | `······` |  Done  |
@@ -17,7 +21,7 @@
 | `00_ww1_011` |              |              |              | DEC ww             | `······` |  NYI   |
 | `00_001_111` |              |              |              | RRCA               | `··R·R↑` |  NYI   |
 | `00_010_000` | `j-2`        |              |              | DJNZ j             | `······` |  NYI   |
-| `00_010_010` |              |              |              | LD (DE), A         | `······` |  NYI   |
+| `00_010_010` |              |              |              | LD (DE), A         | `······` |  Done  |
 | `00_010_111` |              |              |              | RL A               | `··R·R↑` |  NYI   |
 | `00_011_000` | `j-2`        |              |              | JR j               | `······` |  NYI   |
 | `00_011_010` |              |              |              | LD A, (DE)         | `······` |  NYI   |
@@ -30,7 +34,7 @@
 | `00_101_111` |              |              |              | CPL                | `··S·S·` |  NYI   |
 | `00_110_000` | `j-2`        |              |              | JR NC, j           | `······` |  NYI   |
 | `00_110_010` | `n`          | `m`          |              | LD (mn), A         | `······` |  NYI   |
-| `00_110_100` |              |              |              | INC (HL)           | `↑↑↑VR·` |  NYI   |
+| `00_110_100` |              |              |              | INC (HL)           | `↑↑↑VR·` |  Done  |
 | `00_110_101` |              |              |              | DEC (HL)           | `↑↑↑VS·` |  NYI   |
 | `00_110_110` | `m`          |              |              | LD (HL), m         | `······` |  NYI   |
 | `00_110_111` |              |              |              | SCF                | `··R·RS` |  NYI   |

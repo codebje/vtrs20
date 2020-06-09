@@ -1,5 +1,5 @@
 use crate::bus::Bus;
-use crate::cpu::CPU;
+use crate::cpu::*;
 
 /**
  * 16-bit Load
@@ -9,17 +9,16 @@ use crate::cpu::CPU;
 
 impl CPU {
     // Execute LD ww, mn
-    pub(super) fn ld_ww_mn(&mut self, bus: &mut Bus, ww: u8) {
+    pub(super) fn ld_ww_mn(&mut self, bus: &mut Bus, ww: RegW) {
         let n = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
         let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 2)) as u16;
         let mn = m << 8 | n;
 
         match ww {
-            0b00 => self.gr.bc = mn,
-            0b01 => self.gr.de = mn,
-            0b10 => self.gr.hl = mn,
-            0b11 => self.sr.sp = mn,
-            _ => self.error(),
+            RegW::BC => self.gr.bc = mn,
+            RegW::DE => self.gr.de = mn,
+            RegW::HL => self.gr.hl = mn,
+            RegW::SP => self.sr.sp = mn,
         }
 
         self.sr.pc += 3;

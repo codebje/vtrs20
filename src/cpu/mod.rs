@@ -9,29 +9,20 @@ pub mod enums;
 
 // instruction set
 mod alu;
+mod alu16;
 mod ctrl;
 mod iops;
 mod ld_16bit;
 mod ld_8bit;
 mod special;
 
+// instruction decode and dispatch
+mod dispatch;
+
 // peripherals
 mod mmu;
 
 use enums::*;
-
-#[derive(Debug, Eq, PartialEq)]
-#[allow(dead_code)]
-enum Addressing {
-    Implied,
-    Direct,
-    Indirect,
-    Indexed,
-    Extended,
-    Immediate,
-    Relative,
-    IO,
-}
 
 #[repr(u8)]
 enum Condition {
@@ -159,7 +150,7 @@ impl CPU {
     }
 
     // Return a register value. Always returns a u16, as Rust doesn't have dependent types.
-    pub fn reg(&self, reg: Register) -> u16 {
+    pub fn reg(&self, reg: &Register) -> u16 {
         match reg {
             Register::A => self.gr.a as u16,
             Register::F => self.gr.f as u16,
@@ -201,43 +192,32 @@ impl CPU {
     fn fetch_opcode(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
 
-        // decode the instruction
-        match opcode {
-            0b00_000_000 => self.nop(),
-            x if x & 0b11_001_111 == 0b00_000_001 => self.ld_ww_mn(bus, (x & 0b00_110_000) >> 4),
-            x if x & 0b11_111_000 == 0b10_000_000 => self.add_a_g(bus, x & 0b00_000_111),
-            x if x & 0b11_000_111 == 0b00_000_110 => self.ld_g_m(bus, (x & 0b00_111_000) >> 3),
-            0b11_101_101 => self.extended(bus),
-            0b11_000_011 => self.jp(bus),
-            _ => self.error(),
+        self.dispatch(bus, opcode);
+    }
+
+    fn load_g_hl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U) -> u8 {
+        match g.into() {
+            RegGHL::B => ((self.gr.bc & 0xff00) >> 8) as u8,
+            RegGHL::C => (self.gr.bc & 0x00ff) as u8,
+            RegGHL::D => ((self.gr.de & 0xff00) >> 8) as u8,
+            RegGHL::E => (self.gr.de & 0x00ff) as u8,
+            RegGHL::H => ((self.gr.hl & 0xff00) >> 8) as u8,
+            RegGHL::L => (self.gr.hl & 0x00ff) as u8,
+            RegGHL::HL => bus.mem_read(self.mmu.to_physical(self.gr.hl)),
+            RegGHL::A => self.gr.a,
         }
     }
 
-    fn load_g_hl(&mut self, bus: &mut Bus, g: u8) -> Result<u8, ()> {
-        match g {
-            0b000 => Ok(((self.gr.bc & 0xff00) >> 8) as u8),
-            0b001 => Ok((self.gr.bc & 0x00ff) as u8),
-            0b010 => Ok(((self.gr.de & 0xff00) >> 8) as u8),
-            0b011 => Ok((self.gr.de & 0x00ff) as u8),
-            0b100 => Ok(((self.gr.hl & 0xff00) >> 8) as u8),
-            0b101 => Ok((self.gr.hl & 0x00ff) as u8),
-            0b110 => Ok(bus.mem_read(self.mmu.to_physical(self.gr.hl))),
-            0b111 => Ok(self.gr.a),
-            _ => Err(self.error()),
-        }
-    }
-
-    fn store_g_hl(&mut self, bus: &mut Bus, g: u8, v: u8) {
-        match g {
-            0b000 => self.gr.bc = (self.gr.bc & 0x00ff) | ((v as u16) << 8),
-            0b001 => self.gr.bc = (self.gr.bc & 0xff00) | (v as u16),
-            0b010 => self.gr.de = (self.gr.de & 0x00ff) | ((v as u16) << 8),
-            0b011 => self.gr.de = (self.gr.de & 0xff00) | (v as u16),
-            0b100 => self.gr.hl = (self.gr.hl & 0x00ff) | ((v as u16) << 8),
-            0b101 => self.gr.hl = (self.gr.hl & 0xff00) | (v as u16),
-            0b110 => bus.mem_write(self.mmu.to_physical(self.gr.hl), v),
-            0b111 => self.gr.a = v,
-            _ => self.error(),
+    fn store_g_hl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U, v: u8) {
+        match g.into() {
+            RegGHL::B => self.gr.bc = (self.gr.bc & 0x00ff) | ((v as u16) << 8),
+            RegGHL::C => self.gr.bc = (self.gr.bc & 0xff00) | (v as u16),
+            RegGHL::D => self.gr.de = (self.gr.de & 0x00ff) | ((v as u16) << 8),
+            RegGHL::E => self.gr.de = (self.gr.de & 0xff00) | (v as u16),
+            RegGHL::H => self.gr.hl = (self.gr.hl & 0x00ff) | ((v as u16) << 8),
+            RegGHL::L => self.gr.hl = (self.gr.hl & 0xff00) | (v as u16),
+            RegGHL::HL => bus.mem_write(self.mmu.to_physical(self.gr.hl), v),
+            RegGHL::A => self.gr.a = v,
         }
     }
 
@@ -245,7 +225,7 @@ impl CPU {
     fn extended(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
         match opcode {
-            x if x & 0b11_000_111 == 0b00_000_001 => self.out0(bus, (x & 0b00_111_000) >> 3),
+            //x if x & 0b11_000_111 == 0b00_000_001 => self.out0(bus, (x & 0b00_111_000) >> 3),
             _ => self.error(),
         }
     }

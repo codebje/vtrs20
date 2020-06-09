@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::min;
 
 use crate::types::Peripheral;
 
@@ -15,6 +16,12 @@ impl RAM {
             size: size,
             bytes: RefCell::new(vec![0u8; size as usize]),
         }
+    }
+
+    pub fn write(&self, address: u32, data: &[u8]) {
+        let limit = min(data.len(), (self.size + self.start - address) as usize);
+        self.bytes.borrow_mut()[(address - self.start) as usize..limit]
+            .copy_from_slice(&data[..limit]);
     }
 }
 
