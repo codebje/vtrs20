@@ -87,11 +87,17 @@ impl CPU {
     pub(super) fn and_a_ghl(&mut self, bus: &mut Bus, g: RegGHL) {
         let val = self.load_ghl(bus, g) as u16;
         let result = self.reg(Register::A) & val;
-
         self.gr.f = CPU::and_flags(result);
         self.gr.a = result as u8;
-
         self.sr.pc += 1;
+    }
+
+    pub(super) fn and_a_m(&mut self, bus: &mut Bus) {
+        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+        let result = self.reg(Register::A) & m;
+        self.gr.f = CPU::and_flags(result);
+        self.gr.a = result as u8;
+        self.sr.pc += 2;
     }
 }
 
@@ -340,6 +346,7 @@ mod alu_test {
                 0xa5, //                and l
                 0xa6, //                and (hl)
                 0xa7, //                and a
+                0xe6, 0x55, //          and $55
             ],
         );
         bus.add(ram.clone());
@@ -354,22 +361,22 @@ mod alu_test {
         ram.write(0x00ff, &[0b10101010]);
 
         let expected = [
-            (Register::B, 0b1011_0000, Flags::SF | Flags::HF),
-            (Register::C, 0b0000_1110, Flags::HF),
-            (Register::D, 0b0000_0000, Flags::ZF | Flags::HF | Flags::PF),
-            (Register::E, 0b1000_0000, Flags::SF | Flags::HF),
-            (Register::H, 0b0000_0000, Flags::ZF | Flags::HF | Flags::PF),
-            (Register::L, 0b1011_1110, Flags::SF | Flags::HF | Flags::PF),
-            (Register::HL, 0b1010_1010, Flags::SF | Flags::HF | Flags::PF),
-            (Register::A, 0b1011_1110, Flags::SF | Flags::HF | Flags::PF),
+            ("B", 0b1011_0000, Flags::SF | Flags::HF),
+            ("C", 0b0000_1110, Flags::HF),
+            ("D", 0b0000_0000, Flags::ZF | Flags::HF | Flags::PF),
+            ("E", 0b1000_0000, Flags::SF | Flags::HF),
+            ("H", 0b0000_0000, Flags::ZF | Flags::HF | Flags::PF),
+            ("L", 0b1011_1110, Flags::SF | Flags::HF | Flags::PF),
+            ("(HL)", 0b1010_1010, Flags::SF | Flags::HF | Flags::PF),
+            ("A", 0b1011_1110, Flags::SF | Flags::HF | Flags::PF),
+            ("m", 0b0001_0100, Flags::HF | Flags::PF),
         ];
 
-        for (reg, val, flags) in &expected {
-            println!("register {:?}", reg);
+        for (desc, val, flags) in &expected {
             cpu.write_reg(Register::A, 0b1011_1110);
             cpu.cycle(&mut bus);
-            assert_eq!(cpu.reg(Register::A), *val);
-            assert_eq!(cpu.flags(), *flags);
+            assert_eq!(cpu.reg(Register::A), *val, "{}", desc);
+            assert_eq!(cpu.flags(), *flags, "{}", desc);
         }
     }
 }

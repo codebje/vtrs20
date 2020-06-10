@@ -266,7 +266,7 @@ impl CPU {
             0b11_100_011 => self.error(),
             0b11_100_100 => self.error(),
             0b11_100_101 => self.error(),
-            0b11_100_110 => self.error(),
+            0b11_100_110 => self.and_a_m(bus),
             0b11_100_111 => self.error(),
 
             0b11_101_000 => self.error(),
