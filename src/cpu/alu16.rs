@@ -1,4 +1,3 @@
-use crate::bus::Bus;
 use crate::cpu::enums::*;
 use crate::cpu::CPU;
 
@@ -10,7 +9,27 @@ use crate::cpu::CPU;
 
 impl CPU {
     // Execute INC ww
-    pub(super) fn inc_ww(&mut self, bus: &mut Bus, ww: RegW) {}
+    pub(super) fn inc_ww(&mut self, ww: RegW) {
+        match ww {
+            RegW::BC => self.gr.bc = (self.gr.bc as u32 + 1) as u16,
+            RegW::DE => self.gr.de = (self.gr.de as u32 + 1) as u16,
+            RegW::HL => self.gr.hl = (self.gr.hl as u32 + 1) as u16,
+            RegW::SP => self.sr.sp = (self.sr.sp as u32 + 1) as u16,
+        }
+        self.sr.pc += 1;
+    }
+
+    pub(super) fn add_hl_ww(&mut self, ww: RegW) {
+        let value = self.reg(ww) as u32;
+        let hl = self.gr.hl as u32;
+        let result = hl + value;
+        self.gr.hl = result as u16;
+
+        // Half-carry: undefined; Negative: reset; Carry: modified; Others: unchanged
+        self.gr.f = (self.gr.f & 0b1111_1100) | ((result >> 16) & 0b0000_0001) as u8;
+
+        self.sr.pc += 1;
+    }
 }
 
 #[cfg(test)]
@@ -18,7 +37,7 @@ mod alu_test {
     use std::rc::Rc;
 
     use crate::bus::Bus;
-    use crate::cpu::{Flags, Peripheral, Register, CPU};
+    use crate::cpu::*;
     use crate::ram::RAM;
 
     #[test]
@@ -29,49 +48,69 @@ mod alu_test {
         ram.write(
             0x0000,
             &[
-                0x06, 0x14, //          0x0002  ld b, $14
-                0x0e, 0x99, //          0x0004  ld c, $99
-                0x16, 0x3f, //          0x0006  ld d, $3f
-                0x1e, 0x4a, //          0x0008  ld e, $4a
-                0x26, 0x7f, //          0x000a  ld h, $7f
-                0x2e, 0xff, //          0x000c  ld l, $ff
-                0x36, 0xf2, //          0x000e  ld (hl), $f2
-                0x3e, 0xbf, //          0x0010  ld a, $bf
-                0x34, //                0x0018  inc (hl)
-                0x04, //                0x0012  inc b
-                0x0c, //                0x0013  inc c
-                0x14, //                0x0014  inc d
-                0x1c, //                0x0015  inc e
-                0x24, //                0x0016  inc h
-                0x2c, //                0x0017  inc l
-                0x3c, //                0x0019  inc a
+                0x01, 0x99, 0x14, //    0x0000  ld bc, $1499
+                0x11, 0xff, 0xff, //    0x0003  ld de, $ffff
+                0x21, 0xff, 0x7f, //    0x0006  ld hl, $7fff
+                0x03, //                0x000e  inc bc
+                0x13, //                0x000f  inc de
+                0x23, //                0x0010  inc hl
+                0x33, //                0x0011  inc sp
             ],
         );
         bus.add(ram.clone());
         cpu.reset();
-        for _ in 0..8 {
+        for _ in 0..3 {
             cpu.cycle(&mut bus)
         }
 
-        // Hit up (HL) first so H, L don't get changed
-        cpu.cycle(&mut bus);
-        assert_eq!(ram.mem_read(0x7fff), Some(0xf3));
-        assert_eq!(cpu.flags(), Flags::SF);
+        let expected = [
+            (Register::BC, 0x149a),
+            (Register::DE, 0x0000),
+            (Register::HL, 0x8000),
+            (Register::SP, 0x0001),
+        ];
+
+        for (reg, val) in &expected {
+            println!("register {:?}", reg);
+            cpu.cycle(&mut bus);
+            assert_eq!(cpu.reg(*reg), *val);
+        }
+    }
+
+    #[test]
+    fn add_hl_ww() {
+        let mut bus = Bus::new();
+        let mut cpu = CPU::new(&mut bus);
+        let ram = Rc::new(RAM::new(0x0000, 0x10000));
+        ram.write(
+            0x0000,
+            &[
+                0x01, 0x99, 0x14, //    0x0000  ld bc, $1499
+                0x11, 0xff, 0x3f, //    0x0003  ld de, $3fff
+                0x21, 0xff, 0x7f, //    0x0006  ld hl, $7fff
+                0x31, 0x11, 0x11, //    0x0009  ld sp, $1111
+                0x09, //                0x000c  add hl, bc
+                0x19, //                0x000d  add hl, de
+                0x29, //                0x000e  add hl, hl
+                0x39, //                0x000f  add hl, sp
+            ],
+        );
+        bus.add(ram.clone());
+        cpu.reset();
+        for _ in 0..4 {
+            cpu.cycle(&mut bus)
+        }
 
         let expected = [
-            (Register::B, 0x15, Flags::empty()),
-            (Register::C, 0x9a, Flags::SF),
-            (Register::D, 0x40, Flags::HF),
-            (Register::E, 0x4b, Flags::empty()),
-            (Register::H, 0x80, Flags::VF | Flags::SF | Flags::HF),
-            (Register::L, 0x00, Flags::ZF | Flags::HF),
-            (Register::A, 0xc0, Flags::HF | Flags::SF),
+            (Register::BC, 0x9498, Flags::empty()),
+            (Register::DE, 0xd497, Flags::empty()),
+            (Register::HL, 0xa92e, Flags::CF),
+            (Register::SP, 0xba3f, Flags::empty()),
         ];
 
         for (reg, val, flags) in &expected {
-            println!("register {:?}", reg);
             cpu.cycle(&mut bus);
-            assert_eq!(cpu.reg(reg), *val);
+            assert_eq!(cpu.gr.hl, *val, "ADD HL, {}", *reg);
             assert_eq!(cpu.flags(), *flags);
         }
     }

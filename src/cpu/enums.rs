@@ -1,6 +1,7 @@
 use std::convert::From;
+use std::fmt;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(dead_code)]
 pub enum Register {
     A,
@@ -22,8 +23,12 @@ pub enum Register {
     PC,
 }
 
-//#[derive(Debug, Eq, PartialEq)]
-//#[allow(dead_code)]
+impl fmt::Display for Register {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 bitflags! {
     pub struct Flags: u8 {
         const CF = 0b0000_0001;     // carry
@@ -38,6 +43,7 @@ bitflags! {
 }
 
 // `ggg` bitfield register decode, 0b110 excluded
+#[derive(Copy, Clone)]
 pub(super) enum RegG {
     B = 0b000,
     C = 0b001,
@@ -48,8 +54,22 @@ pub(super) enum RegG {
     A = 0b111,
 }
 
+impl From<RegG> for Register {
+    fn from(reg: RegG) -> Register {
+        match reg {
+            RegG::B => Register::B,
+            RegG::C => Register::C,
+            RegG::D => Register::D,
+            RegG::E => Register::E,
+            RegG::H => Register::H,
+            RegG::L => Register::L,
+            RegG::A => Register::A,
+        }
+    }
+}
+
 // `ggg` bitfield register decode, plus 0b110 = HL
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(super) enum RegGHL {
     B = 0b000,
     C = 0b001,
@@ -76,9 +96,21 @@ impl From<RegG> for RegGHL {
 }
 
 // `ww` bitfield register decode
+#[derive(Copy, Clone)]
 pub(super) enum RegW {
     BC = 0b00,
     DE = 0b01,
     HL = 0b10,
     SP = 0b11,
+}
+
+impl From<RegW> for Register {
+    fn from(reg: RegW) -> Register {
+        match reg {
+            RegW::BC => Register::BC,
+            RegW::DE => Register::DE,
+            RegW::HL => Register::HL,
+            RegW::SP => Register::SP,
+        }
+    }
 }

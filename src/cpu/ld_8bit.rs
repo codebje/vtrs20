@@ -9,9 +9,9 @@ use crate::cpu::*;
 
 impl CPU {
     // Execute LD g, m or LD (HL), m
-    pub(super) fn ld_g_hl_m(&mut self, bus: &mut Bus, g: RegGHL) {
+    pub(super) fn ld_ghl_m(&mut self, bus: &mut Bus, g: RegGHL) {
         let imm = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
-        self.store_g_hl(bus, g, imm);
+        self.store_ghl(bus, g, imm);
         self.sr.pc += 2;
     }
 
@@ -19,7 +19,7 @@ impl CPU {
     // This instruction is only defined for BC, DE but this code will work
     // for _any_ register, 8 or 16-bit. This is unchecked during execution.
     pub(super) fn ld_indirect_a(&mut self, bus: &mut Bus, reg: Register) {
-        bus.mem_write(self.mmu.to_physical(self.reg(&reg)), self.gr.a);
+        bus.mem_write(self.mmu.to_physical(self.reg(reg)), self.gr.a);
         self.sr.pc += 1;
     }
 }
@@ -61,10 +61,10 @@ mod ld_test {
         cpu.cycle(&mut bus);
         cpu.cycle(&mut bus);
         cpu.cycle(&mut bus);
-        assert_eq!(cpu.reg(&Register::A), 0xbe);
-        assert_eq!(cpu.reg(&Register::BC), 0x1422);
-        assert_eq!(cpu.reg(&Register::DE), 0x3f4a);
-        assert_eq!(cpu.reg(&Register::HL), 0x8974);
+        assert_eq!(cpu.reg(Register::A), 0xbe);
+        assert_eq!(cpu.reg(Register::BC), 0x1422);
+        assert_eq!(cpu.reg(Register::DE), 0x3f4a);
+        assert_eq!(cpu.reg(Register::HL), 0x8974);
         assert_eq!(ram.mem_read(0x8974), Some(0xf2));
     }
 

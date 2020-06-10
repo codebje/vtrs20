@@ -20,7 +20,7 @@ impl RAM {
 
     pub fn write(&self, address: u32, data: &[u8]) {
         let limit = min(data.len(), (self.size + self.start - address) as usize);
-        self.bytes.borrow_mut()[(address - self.start) as usize..limit]
+        self.bytes.borrow_mut()[(address - self.start) as usize..(limit + address as usize)]
             .copy_from_slice(&data[..limit]);
     }
 }

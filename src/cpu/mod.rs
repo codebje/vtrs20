@@ -149,9 +149,14 @@ impl CPU {
         Flags::from_bits_truncate(self.gr.f)
     }
 
+    // Return zero or one for carry flag
+    pub fn carry(&self) -> u16 {
+        (self.gr.f & 1) as u16
+    }
+
     // Return a register value. Always returns a u16, as Rust doesn't have dependent types.
-    pub fn reg(&self, reg: &Register) -> u16 {
-        match reg {
+    pub fn reg<R: Into<Register>>(&self, reg: R) -> u16 {
+        match reg.into() {
             Register::A => self.gr.a as u16,
             Register::F => self.gr.f as u16,
             Register::B => self.gr.bc >> 8,
@@ -169,6 +174,29 @@ impl CPU {
             Register::IY => self.sr.iy,
             Register::SP => self.sr.sp,
             Register::PC => self.sr.pc,
+        }
+    }
+
+    // Set a register value. Always returns a u16, as Rust doesn't have dependent types.
+    pub fn write_reg<R: Into<Register>>(&mut self, reg: R, v: u16) {
+        match reg.into() {
+            Register::A => self.gr.a = v as u8,
+            Register::F => self.gr.f = v as u8,
+            Register::B => self.gr.bc = (self.gr.bc & 0xff) | v << 8,
+            Register::C => self.gr.bc = (self.gr.bc & 0xff00) | (v & 0xff),
+            Register::D => self.gr.de = (self.gr.de & 0xff) | v << 8,
+            Register::E => self.gr.de = (self.gr.de & 0xff00) | (v & 0xff),
+            Register::H => self.gr.hl = (self.gr.hl & 0xff) | v << 8,
+            Register::L => self.gr.hl = (self.gr.hl & 0xff00) | (v & 0xff),
+            Register::BC => self.gr.bc = v,
+            Register::DE => self.gr.de = v,
+            Register::HL => self.gr.hl = v,
+            Register::I => self.sr.i = v as u8,
+            Register::R => self.sr.r = v as u8,
+            Register::IX => self.sr.ix = v,
+            Register::IY => self.sr.iy = v,
+            Register::SP => self.sr.sp = v,
+            Register::PC => self.sr.pc = v,
         }
     }
 
@@ -195,7 +223,7 @@ impl CPU {
         self.dispatch(bus, opcode);
     }
 
-    fn load_g_hl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U) -> u8 {
+    fn load_ghl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U) -> u8 {
         match g.into() {
             RegGHL::B => ((self.gr.bc & 0xff00) >> 8) as u8,
             RegGHL::C => (self.gr.bc & 0x00ff) as u8,
@@ -208,7 +236,7 @@ impl CPU {
         }
     }
 
-    fn store_g_hl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U, v: u8) {
+    fn store_ghl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U, v: u8) {
         match g.into() {
             RegGHL::B => self.gr.bc = (self.gr.bc & 0x00ff) | ((v as u16) << 8),
             RegGHL::C => self.gr.bc = (self.gr.bc & 0xff00) | (v as u16),
@@ -218,15 +246,6 @@ impl CPU {
             RegGHL::L => self.gr.hl = (self.gr.hl & 0xff00) | (v as u16),
             RegGHL::HL => bus.mem_write(self.mmu.to_physical(self.gr.hl), v),
             RegGHL::A => self.gr.a = v,
-        }
-    }
-
-    // Extended instructions
-    fn extended(&mut self, bus: &mut Bus) {
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
-        match opcode {
-            //x if x & 0b11_000_111 == 0b00_000_001 => self.out0(bus, (x & 0b00_111_000) >> 3),
-            _ => self.error(),
         }
     }
 }
