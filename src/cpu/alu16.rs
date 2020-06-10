@@ -16,7 +16,6 @@ impl CPU {
             RegW::HL => self.gr.hl = (self.gr.hl as u32 + 1) as u16,
             RegW::SP => self.sr.sp = (self.sr.sp as u32 + 1) as u16,
         }
-        self.sr.pc += 1;
     }
 
     pub(super) fn add_hl_ww(&mut self, ww: RegW) {
@@ -27,8 +26,6 @@ impl CPU {
 
         // Half-carry: undefined; Negative: reset; Carry: modified; Others: unchanged
         self.gr.f = (self.gr.f & 0b1111_1100) | ((result >> 16) & 0b0000_0001) as u8;
-
-        self.sr.pc += 1;
     }
 }
 

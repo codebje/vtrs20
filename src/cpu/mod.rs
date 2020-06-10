@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::rc::Rc;
 
 use crate::bus::Bus;
@@ -23,36 +22,6 @@ mod dispatch;
 mod mmu;
 
 use enums::*;
-
-#[repr(u8)]
-enum Condition {
-    NonZero = 0,
-    Zero,
-    NonCarry,
-    Carry,
-    ParityOdd,
-    ParityEven,
-    SignPlus,
-    SignMinus,
-}
-
-impl TryFrom<u8> for Condition {
-    type Error = ();
-
-    fn try_from(v: u8) -> Result<Self, Self::Error> {
-        match v {
-            0b000 => Ok(Condition::NonZero),
-            0b001 => Ok(Condition::Zero),
-            0b010 => Ok(Condition::NonCarry),
-            0b011 => Ok(Condition::Carry),
-            0b100 => Ok(Condition::ParityOdd),
-            0b101 => Ok(Condition::ParityEven),
-            0b110 => Ok(Condition::SignPlus),
-            0b111 => Ok(Condition::SignMinus),
-            _ => Err(()),
-        }
-    }
-}
 
 #[derive(Debug)]
 enum Mode {
@@ -149,11 +118,6 @@ impl CPU {
         Flags::from_bits_truncate(self.gr.f)
     }
 
-    // Return zero or one for carry flag
-    pub fn carry(&self) -> u16 {
-        (self.gr.f & 1) as u16
-    }
-
     // Return a register value. Always returns a u16, as Rust doesn't have dependent types.
     pub fn reg<R: Into<Register>>(&self, reg: R) -> u16 {
         match reg.into() {
@@ -205,7 +169,7 @@ impl CPU {
         // check for: interrupt, DMA, ...?
         match self.mode {
             Mode::Reset => (),
-            Mode::OpCodeFetch => self.fetch_opcode(bus),
+            Mode::OpCodeFetch => self.dispatch(bus),
             //Mode::OpCodeFetch(opcode) => self.decode(opcode),
         }
     }
@@ -216,11 +180,42 @@ impl CPU {
         println!("Illegal instruction. Halt.");
     }
 
-    // Pull an opcode from the bus
-    fn fetch_opcode(&mut self, bus: &mut Bus) {
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
-
-        self.dispatch(bus, opcode);
+    // Load an operand using an addressing mode. Will adjust PC as needed.
+    fn load_operand(&mut self, bus: &mut Bus, address: Addressing) -> u16 {
+        match address {
+            Addressing::Direct(reg) => self.reg(reg),
+            Addressing::Indirect(reg) => bus.mem_read(self.mmu.to_physical(self.reg(reg))) as u16,
+            Addressing::Indexed(reg) => {
+                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
+                let addr = self.reg(reg) as i32 + d as i32;
+                self.sr.pc += 1;
+                bus.mem_read(self.mmu.to_physical(addr as u16)) as u16
+            }
+            Addressing::Extended() => {
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let addr = m << 8 | n;
+                self.sr.pc += 2;
+                bus.mem_read(self.mmu.to_physical(addr)) as u16
+            }
+            Addressing::Immediate() => {
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                self.sr.pc += 1;
+                m
+            }
+            Addressing::Immediate16() => {
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let addr = m << 8 | n;
+                self.sr.pc += 2;
+                addr
+            }
+            Addressing::Relative() => {
+                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
+                self.sr.pc += 1;
+                (self.sr.pc as i32 + d as i32) as u16
+            }
+        }
     }
 
     fn load_ghl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U) -> u8 {
@@ -247,5 +242,19 @@ impl CPU {
             RegGHL::HL => bus.mem_write(self.mmu.to_physical(self.gr.hl), v),
             RegGHL::A => self.gr.a = v,
         }
+    }
+}
+
+#[cfg(test)]
+mod cpu_test {
+    // TODO test addressing stuff
+    #[test]
+    fn signs() {
+        // how does Rust handle "u16 as i32" conversion?
+        let x: u16 = 0xffff;
+        let y: i32 = x as i32;
+        let d: i8 = -15;
+        let z = (y + d as i32) as u16;
+        assert_eq!(z, 0xfff0);
     }
 }

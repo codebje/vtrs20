@@ -10,8 +10,8 @@ use crate::cpu::*;
 impl CPU {
     // Execute LD ww, mn
     pub(super) fn ld_ww_mn(&mut self, bus: &mut Bus, ww: RegW) {
-        let n = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
-        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 2)) as u16;
+        let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
         let mn = m << 8 | n;
 
         match ww {
@@ -21,6 +21,6 @@ impl CPU {
             RegW::SP => self.sr.sp = mn,
         }
 
-        self.sr.pc += 3;
+        self.sr.pc += 2;
     }
 }

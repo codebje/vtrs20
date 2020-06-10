@@ -18,13 +18,11 @@ impl CPU {
     // adding two positive numbers or two negative numbers (ie, bit 7 is equal in src and add)
     // and the result is a different sign.
     fn add_flags(src: u16, add: u16, result: u16) -> u8 {
-        let flags =
-            (result & 0b1000_0000)                  // sign equals bit 7 of result
+        let flags = (result & 0b1000_0000)                  // sign equals bit 7 of result
             | (if (result & 0xff) == 0 { 0b0100_0000 } else { 0 }) // zero
             | ((src ^ add ^ result) & 0b0001_0000)  // half-carry set if bit carried into result bit 5
             | ((((src ^ add ^ 0b1000_0000) & (src ^ result)) >> 5) & 0b0000_0100) // overflow
-            | (result >> 8 & 0b0000_0001)           // carry equals bit 8 of result
-            ;
+            | (if result > 0xff { 0b0000_0001} else { 0 });
         flags as u8
     }
 
@@ -38,35 +36,39 @@ impl CPU {
         flags as u8
     }
 
-    // Adder: used by all the src variations on ADD
-    fn add(&mut self, src: u16, carry: u16) {
-        let result = self.gr.a as u16 + src + carry;
-        self.gr.f = CPU::add_flags(self.gr.a as u16, src, result);
+    // Adds "src" to A, storing the result in A.
+    pub(super) fn add_a(&mut self, bus: &mut Bus, src: Addressing, with_carry: bool) {
+        let carry = if with_carry { self.gr.f as u16 & 1 } else { 0 };
+        let operand = self.load_operand(bus, src);
+        let result = self.gr.a as u16 + operand + carry;
+        self.gr.f = CPU::add_flags(self.gr.a as u16, operand, result);
         self.gr.a = result as u8;
-        self.sr.pc += 1;
     }
 
-    // Execute ADD A,g or ADD A,(HL)
-    pub(super) fn add_a_ghl(&mut self, bus: &mut Bus, g: RegGHL) {
-        let src = self.load_ghl(bus, g) as u16;
-        self.add(src, 0);
-    }
+    // Subtracts "src" from A, storing the result in A
+    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Addressing, with_borrow: bool) {
+        let carry = if with_borrow {
+            (!(self.gr.f & 1) as u16 + 1) & 0xff
+        } else {
+            0
+        };
+        let operand = (!self.load_operand(bus, src) & 0xff) + 1;
+        let result = self.gr.a as u16 + operand + carry as u16;
 
-    // Execute ADD A,m
-    pub(super) fn add_a_m(&mut self, bus: &mut Bus) {
-        self.add(bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16, 0);
-        self.sr.pc += 1; // consume 'm'
-    }
+        println!(
+            "a=${:02x}  o=${:02x}  c=${:02x}  r=${:02x}",
+            self.gr.a, operand, carry, result as u8
+        );
+        println!(
+            "a=0b{:08b}  o=0b{:08b}  c=0b{:08b}  r=0b{:08b}",
+            self.gr.a, operand, carry, result as u8
+        );
 
-    pub(super) fn adc_a_ghl(&mut self, bus: &mut Bus, g: RegGHL) {
-        let src = self.load_ghl(bus, g) as u16;
-        self.add(src, self.carry());
-    }
+        // Flags takes the inverse of carry and negative
+        self.gr.f = CPU::add_flags(self.gr.a as u16, operand, result);
+        self.gr.f ^= 0b0000_0011;
 
-    pub(super) fn adc_a_m(&mut self, bus: &mut Bus) {
-        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
-        self.add(m, self.carry());
-        self.sr.pc += 1;
+        self.gr.a = result as u8;
     }
 
     // Execute INC g or INC (HL)
@@ -79,8 +81,6 @@ impl CPU {
         self.gr.f = flags | (self.gr.f & 0b1);
 
         self.store_ghl(bus, g, result as u8);
-
-        self.sr.pc += 1;
     }
 
     // Logic: AND g, AND (HL)
@@ -89,15 +89,14 @@ impl CPU {
         let result = self.reg(Register::A) & val;
         self.gr.f = CPU::and_flags(result);
         self.gr.a = result as u8;
-        self.sr.pc += 1;
     }
 
     pub(super) fn and_a_m(&mut self, bus: &mut Bus) {
-        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
         let result = self.reg(Register::A) & m;
         self.gr.f = CPU::and_flags(result);
         self.gr.a = result as u8;
-        self.sr.pc += 2;
+        self.sr.pc += 1;
     }
 }
 
@@ -222,6 +221,7 @@ mod alu_test {
             assert_eq!(cpu.flags(), *flags, "Testing value ${:02x}", *val);
         }
     }
+
     #[test]
     fn add_from_m() {
         let mut bus = Bus::new();
@@ -377,6 +377,61 @@ mod alu_test {
             cpu.cycle(&mut bus);
             assert_eq!(cpu.reg(Register::A), *val, "{}", desc);
             assert_eq!(cpu.flags(), *flags, "{}", desc);
+        }
+    }
+
+    #[test]
+    fn sub() {
+        let mut bus = Bus::new();
+        let mut cpu = CPU::new(&mut bus);
+        let ram = Rc::new(RAM::new(0x0000, 0x10000));
+        ram.write(
+            0x0000,
+            &[
+                0xd6, 0x10, //          sub a, $10
+                0xd6, 0x10, //          sub a, $10
+                0xd6, 0xc0, //          sub a, $c0
+                0xde, 0x10, //          sbc a, $10
+                0xde, 0x10, //          sbc a, $10
+                0x98, //                sbc a, b
+                0x99, //                sbc a, c
+                0x9a, //                sbc a, d
+                0x9b, //                sbc a, e
+                0x9c, //                sbc a, h
+                0x9d, //                sbc a, l
+                0x9e, //                sbc a, (hl)
+                0x9f, //                sbc a, a
+            ],
+        );
+        bus.add(ram.clone());
+        cpu.reset();
+
+        // Load up some register values
+        cpu.write_reg(Register::B, 0x25);
+        cpu.write_reg(Register::C, 0x73);
+        cpu.write_reg(Register::D, 0x62);
+        cpu.write_reg(Register::E, 0x44);
+        cpu.write_reg(Register::H, 0xbe);
+        cpu.write_reg(Register::L, 0xef);
+        ram.write(0xbeef, &[0xc0]);
+
+        let expected = [
+            // sub m
+            ("sub m 1", 0x20, 0x10, Flags::NF),
+            ("sub m 2", 0xbe, 0xae, Flags::SF | Flags::NF),
+            ("sub m 3", 0xbe, 0xfe, Flags::SF | Flags::NF | Flags::CF),
+            // sbc m
+            ("sbc m 2", 0x20, 0x0f, Flags::HF | Flags::NF),
+            ("sbc m 2", 0x20, 0x10, Flags::NF),
+            // sbc g
+            ("sbc g 2", 0x25, 0x00, Flags::ZF | Flags::NF),
+        ];
+
+        for (desc, a, val, flags) in &expected {
+            cpu.write_reg(Register::A, *a);
+            cpu.cycle(&mut bus);
+            assert_eq!(cpu.reg(Register::A), *val, "{}", *desc);
+            assert_eq!(cpu.flags(), *flags, "{}", *desc);
         }
     }
 }

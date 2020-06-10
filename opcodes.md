@@ -50,10 +50,10 @@ All other opcodes are treated as invalid instructions.
 | `10_000_110` |              |              |              | ADD A, (HL)        | `↑↑↑VR↑` |  Done  |
 | `10_001_ggg` |              |              |              | ADC A, g           | `↑↑↑VR↑` |  Done  |
 | `10_001_110` |              |              |              | ADC A, (HL)        | `↑↑↑VR↑` |  Done  |
-| `10_010_ggg` |              |              |              | SUB g              | `↑↑↑VS↑` |        |
-| `10_010_110` |              |              |              | SUB (HL)           | `↑↑↑VS↑` |        |
-| `10_011_ggg` |              |              |              | SBC A, g           | `↑↑↑VS↑` |        |
-| `10_011_110` |              |              |              | SBC A, (HL)        | `↑↑↑VS↑` |        |
+| `10_010_ggg` |              |              |              | SUB g              | `↑↑↑VS↑` |  Some  |
+| `10_010_110` |              |              |              | SUB (HL)           | `↑↑↑VS↑` |  Some  |
+| `10_011_ggg` |              |              |              | SBC A, g           | `↑↑↑VS↑` |  Some  |
+| `10_011_110` |              |              |              | SBC A, (HL)        | `↑↑↑VS↑` |  Some  |
 | `10_100_ggg` |              |              |              | AND g              | `↑↑SPRR` |  Done  |
 | `10_100_110` |              |              |              | AND (HL)           | `↑↑SPRR` |  Done  |
 | `10_101_ggg` |              |              |              | XOR g              | `↑↑SPRR` |        |
@@ -94,7 +94,7 @@ All other opcodes are treated as invalid instructions.
 | `11_001_101` | `n`          | `m`          |              | CALL mn            | `······` |        |
 | `11_001_110` | `m`          |              |              | ADC A, m           | `↑↑↑VR↑` | Done   |
 | `11_010_011` | `m`          |              |              | OUT (m), A         | `······` |        |
-| `11_010_110` | `m`          |              |              | SUB m              | `↑↑↑VS↑` |        |
+| `11_010_110` | `m`          |              |              | SUB m              | `↑↑↑VS↑` | Done   |
 | `11_011_001` |              |              |              | EXX                | `······` |        |
 | `11_011_011` | `m`          |              |              | IN A, (m)          | `······` |        |
 | `11_011_101` | `00_110_101` | `d`          |              | DEC (IX + d)       | `↑↑↑VS·` |        |
@@ -131,7 +131,7 @@ All other opcodes are treated as invalid instructions.
 |              | `11_100_101` |              |              | PUSH IX            | `······` |        |
 |              | `11_101_001` |              |              | JP (IX)            | `······` |        |
 |              | `11_111_001` |              |              | LD SP, IX          | `······` |        |
-| `11_011_110` | `m`          |              |              | SBC A, m           | `↑↑↑VS↑` |        |
+| `11_011_110` | `m`          |              |              | SBC A, m           | `↑↑↑VS↑` |  Done  |
 | `11_100_011` |              |              |              | EX (SP), HL        | `······` |        |
 | `11_100_110` | `m`          |              |              | AND m              | `↑↑SPRR` |        |
 | `11_101_001` |              |              |              | JP (HL)            | `······` |        |

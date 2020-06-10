@@ -1,4 +1,4 @@
-use std::convert::From;
+use std::convert::{From, TryFrom};
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -111,6 +111,81 @@ impl From<RegW> for Register {
             RegW::DE => Register::DE,
             RegW::HL => Register::HL,
             RegW::SP => Register::SP,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub(super) enum RegIndirect {
+    BC,
+    DE,
+    HL,
+}
+
+impl From<RegIndirect> for Register {
+    fn from(reg: RegIndirect) -> Register {
+        match reg {
+            RegIndirect::BC => Register::BC,
+            RegIndirect::DE => Register::DE,
+            RegIndirect::HL => Register::HL,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub(super) enum RegIndex {
+    IX,
+    IY,
+}
+
+impl From<RegIndex> for Register {
+    fn from(reg: RegIndex) -> Register {
+        match reg {
+            RegIndex::IX => Register::IX,
+            RegIndex::IY => Register::IY,
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub(super) enum Addressing {
+    Direct(Register),
+    Indirect(RegIndirect),
+    Indexed(RegIndex),
+    Extended(),
+    Immediate(),
+    Immediate16(),
+    Relative(),
+}
+
+#[repr(u8)]
+enum Condition {
+    NonZero = 0,
+    Zero,
+    NonCarry,
+    Carry,
+    ParityOdd,
+    ParityEven,
+    SignPlus,
+    SignMinus,
+}
+
+impl TryFrom<u8> for Condition {
+    type Error = ();
+
+    fn try_from(v: u8) -> Result<Self, Self::Error> {
+        match v {
+            0b000 => Ok(Condition::NonZero),
+            0b001 => Ok(Condition::Zero),
+            0b010 => Ok(Condition::NonCarry),
+            0b011 => Ok(Condition::Carry),
+            0b100 => Ok(Condition::ParityOdd),
+            0b101 => Ok(Condition::ParityEven),
+            0b110 => Ok(Condition::SignPlus),
+            0b111 => Ok(Condition::SignMinus),
+            _ => Err(()),
         }
     }
 }
