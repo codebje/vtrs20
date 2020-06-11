@@ -242,9 +242,7 @@ impl CPU {
     fn store_operand(&mut self, bus: &mut Bus, operand: Operand, value: u16) {
         match operand {
             Operand::Direct(reg) => self.write_reg(reg, value),
-            Operand::Indirect(reg) => {
-                bus.mem_write(self.mmu.to_physical(self.reg(reg)), value as u8)
-            }
+            Operand::Indirect(reg) => bus.mem_write(self.mmu.to_physical(self.reg(reg)), value as u8),
             Operand::Indexed(reg) => {
                 let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
                 let addr = self.reg(reg) as i32 + d as i32;
@@ -331,6 +329,28 @@ mod cpu_test {
         }
     }
 
+    fn print_cpu(cpu: &CPU, bus: &mut Bus) {
+        let opcode = bus.mem_read(cpu.sr.pc as u32); // assume identity MMU
+        println!(
+            "PC=${:04x}, opcode=${:02x} (0b{:08b}) \
+                A=${:02x} BC=${:04x} DE=${:04x} HL=${:04x} \
+                {}{}-{}-{}{}{}",
+            cpu.sr.pc,
+            opcode,
+            opcode,
+            cpu.gr.a,
+            cpu.gr.bc,
+            cpu.gr.de,
+            cpu.gr.hl,
+            if cpu.gr.f & 0b1000_0000 != 0 { 'S' } else { 's' },
+            if cpu.gr.f & 0b0100_0000 != 0 { 'Z' } else { 'z' },
+            if cpu.gr.f & 0b0001_0000 != 0 { 'H' } else { 'h' },
+            if cpu.gr.f & 0b0000_0100 != 0 { 'P' } else { 'p' },
+            if cpu.gr.f & 0b0000_0010 != 0 { 'N' } else { 'n' },
+            if cpu.gr.f & 0b0000_0001 != 0 { 'C' } else { 'c' },
+        );
+    }
+
     #[test]
     fn zexdoc() {
         let mut bus = Bus::new();
@@ -367,7 +387,7 @@ mod cpu_test {
         // Run until HALT is executed
         cpu.reset();
         loop {
-            println!("Cycling CPU at PC=${:04x}", cpu.sr.pc);
+            print_cpu(&cpu, &mut bus);
             cpu.cycle(&mut bus);
             if cpu.mode == crate::cpu::Mode::Halt {
                 break;

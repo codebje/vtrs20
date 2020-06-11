@@ -68,7 +68,6 @@ mod alu_test {
         ];
 
         for (reg, val) in &expected {
-            println!("register {:?}", reg);
             cpu.cycle(&mut bus);
             assert_eq!(cpu.reg(*reg), *val);
         }

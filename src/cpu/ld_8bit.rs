@@ -8,6 +8,12 @@ use crate::cpu::*;
  */
 
 impl CPU {
+    // There's really nothing to this after the decode...
+    pub(super) fn ld_8(&mut self, bus: &mut Bus, src: Operand, dst: Operand) {
+        let val = self.load_operand(bus, src);
+        self.store_operand(bus, dst, val);
+    }
+
     // Execute LD g, m or LD (HL), m
     pub(super) fn ld_ghl_m(&mut self, bus: &mut Bus, g: RegGHL) {
         let imm = bus.mem_read(self.mmu.to_physical(self.sr.pc));

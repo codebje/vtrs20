@@ -11,11 +11,11 @@ use crate::cpu::*;
 
 impl CPU {
     // JP mn
-    pub(super) fn jp(&mut self, bus: &mut Bus) {
-        let n = bus.mem_read(self.mmu.to_physical(self.sr.pc));
-        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
-        let addr = n as u16 | (m as u16) << 8;
-        self.sr.pc = addr;
+    pub(super) fn jp(&mut self, bus: &mut Bus, src: Operand, condition: Option<Condition>) {
+        let dest = self.load_operand(bus, src);
+        if self.is_condition(condition) {
+            self.sr.pc = dest;
+        }
     }
 
     pub(super) fn call(&mut self, bus: &mut Bus, src: Operand, condition: Option<Condition>) {

@@ -45,8 +45,8 @@ impl CPU {
         self.gr.a = result as u8;
     }
 
-    // Subtracts "src" from A, storing the result in A
-    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Operand, with_borrow: bool) {
+    // Subtracts "src" from A, storing the result in A if saving is true
+    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Operand, with_borrow: bool, saving: bool) {
         let carry = if with_borrow { self.gr.f & 1 } else { 0 };
         let operand = self.load_operand(bus, src) as i32;
         let result = self.gr.a as i32 - operand - carry as i32;
@@ -55,7 +55,9 @@ impl CPU {
         self.gr.f = CPU::add_flags(self.gr.a as u16, operand as u16, result as u16);
         self.gr.f ^= 0b0000_0010;
 
-        self.gr.a = result as u8;
+        if saving {
+            self.gr.a = result as u8;
+        }
     }
 
     // Execute INC g or INC (HL)
