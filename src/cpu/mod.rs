@@ -321,6 +321,12 @@ mod cpu_test {
 
     struct CIO {}
 
+    impl CIO {
+        fn new() -> CIO {
+            CIO {}
+        }
+    }
+
     impl Peripheral for CIO {
         fn io_write(&self, address: u16, data: u8) {
             if address == 0xff {
@@ -329,6 +335,7 @@ mod cpu_test {
         }
     }
 
+    #[allow(dead_code)]
     fn print_cpu(cpu: &CPU, bus: &mut Bus) {
         let opcode = bus.mem_read(cpu.sr.pc as u32); // assume identity MMU
         println!(
@@ -366,7 +373,7 @@ mod cpu_test {
                 0x3E, 0x02, //        CPM:      LD   a,2
                 0xB9, //                        CP   c
                 0xCA, 0x1A, 0x00, //            JP   z,oute
-                0x60, 0x69, //                  LD   hl,bc
+                0x62, 0x6B, //                  LD   hl,de
                 0x7E, //              LOOP:     LD   a,(hl)
                 0xFE, 0x24, //                  CP   '$'
                 0xCA, 0x1D, 0x00, //            JP   z,done
@@ -383,6 +390,9 @@ mod cpu_test {
         ram.load_file(0x100, "test/zexdoc.com")
             .expect("Loading ZEXDOC test binary");
         bus.add(ram.clone());
+
+        let cio = CIO::new();
+        bus.add(Rc::new(cio));
 
         // Run until HALT is executed
         cpu.reset();

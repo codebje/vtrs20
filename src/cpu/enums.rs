@@ -43,32 +43,6 @@ bitflags! {
 
 }
 
-// `ggg` bitfield register decode, 0b110 excluded
-#[derive(Copy, Clone)]
-pub(super) enum RegG {
-    B = 0b000,
-    C = 0b001,
-    D = 0b010,
-    E = 0b011,
-    H = 0b100,
-    L = 0b101,
-    A = 0b111,
-}
-
-impl From<RegG> for Register {
-    fn from(reg: RegG) -> Register {
-        match reg {
-            RegG::B => Register::B,
-            RegG::C => Register::C,
-            RegG::D => Register::D,
-            RegG::E => Register::E,
-            RegG::H => Register::H,
-            RegG::L => Register::L,
-            RegG::A => Register::A,
-        }
-    }
-}
-
 // `ggg` bitfield register decode, plus 0b110 = HL
 #[derive(Copy, Clone, Debug)]
 pub(super) enum RegGHL {
@@ -80,20 +54,6 @@ pub(super) enum RegGHL {
     L = 0b101,
     HL = 0b110,
     A = 0b111,
-}
-
-impl From<RegG> for RegGHL {
-    fn from(reg: RegG) -> RegGHL {
-        match reg {
-            RegG::B => RegGHL::B,
-            RegG::C => RegGHL::C,
-            RegG::D => RegGHL::D,
-            RegG::E => RegGHL::E,
-            RegG::H => RegGHL::H,
-            RegG::L => RegGHL::L,
-            RegG::A => RegGHL::A,
-        }
-    }
 }
 
 // `ww` bitfield register decode

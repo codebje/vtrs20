@@ -13,20 +13,6 @@ impl CPU {
         let val = self.load_operand(bus, src);
         self.store_operand(bus, dst, val);
     }
-
-    // Execute LD g, m or LD (HL), m
-    pub(super) fn ld_ghl_m(&mut self, bus: &mut Bus, g: RegGHL) {
-        let imm = bus.mem_read(self.mmu.to_physical(self.sr.pc));
-        self.store_ghl(bus, g, imm);
-        self.sr.pc += 1;
-    }
-
-    // Execute LD (regpair), A
-    // This instruction is only defined for BC, DE but this code will work
-    // for _any_ register, 8 or 16-bit. This is unchecked during execution.
-    pub(super) fn ld_indirect_a(&mut self, bus: &mut Bus, reg: Register) {
-        bus.mem_write(self.mmu.to_physical(self.reg(reg)), self.gr.a);
-    }
 }
 
 #[cfg(test)]
