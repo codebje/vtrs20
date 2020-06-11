@@ -37,36 +37,23 @@ impl CPU {
     }
 
     // Adds "src" to A, storing the result in A.
-    pub(super) fn add_a(&mut self, bus: &mut Bus, src: Addressing, with_carry: bool) {
+    pub(super) fn add_a(&mut self, bus: &mut Bus, src: Operand, with_carry: bool) {
         let carry = if with_carry { self.gr.f as u16 & 1 } else { 0 };
         let operand = self.load_operand(bus, src);
         let result = self.gr.a as u16 + operand + carry;
-        self.gr.f = CPU::add_flags(self.gr.a as u16, operand, result);
+        self.gr.f = CPU::add_flags(self.gr.a as u16, operand as u16, result as u16);
         self.gr.a = result as u8;
     }
 
     // Subtracts "src" from A, storing the result in A
-    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Addressing, with_borrow: bool) {
-        let carry = if with_borrow {
-            (!(self.gr.f & 1) as u16 + 1) & 0xff
-        } else {
-            0
-        };
-        let operand = (!self.load_operand(bus, src) & 0xff) + 1;
-        let result = self.gr.a as u16 + operand + carry as u16;
+    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Operand, with_borrow: bool) {
+        let carry = if with_borrow { self.gr.f & 1 } else { 0 };
+        let operand = self.load_operand(bus, src) as i32;
+        let result = self.gr.a as i32 - operand - carry as i32;
 
-        println!(
-            "a=${:02x}  o=${:02x}  c=${:02x}  r=${:02x}",
-            self.gr.a, operand, carry, result as u8
-        );
-        println!(
-            "a=0b{:08b}  o=0b{:08b}  c=0b{:08b}  r=0b{:08b}",
-            self.gr.a, operand, carry, result as u8
-        );
-
-        // Flags takes the inverse of carry and negative
-        self.gr.f = CPU::add_flags(self.gr.a as u16, operand, result);
-        self.gr.f ^= 0b0000_0011;
+        // Same as add - but NF is set, not reset
+        self.gr.f = CPU::add_flags(self.gr.a as u16, operand as u16, result as u16);
+        self.gr.f ^= 0b0000_0010;
 
         self.gr.a = result as u8;
     }
@@ -77,7 +64,7 @@ impl CPU {
         let result = val + 1;
 
         // flags set like add, but preserve CF
-        let flags = CPU::add_flags(val, 1, result) & 0b1111_1110;
+        let flags = CPU::add_flags(val as u16, 1, result as u16) & 0b1111_1110;
         self.gr.f = flags | (self.gr.f & 0b1);
 
         self.store_ghl(bus, g, result as u8);
@@ -323,7 +310,6 @@ mod alu_test {
         ];
 
         for (reg, val, flags) in &expected {
-            println!("register {:?}", reg);
             cpu.cycle(&mut bus);
             assert_eq!(cpu.reg(*reg), *val);
             assert_eq!(cpu.flags(), *flags);
@@ -426,6 +412,16 @@ mod alu_test {
             // sbc g
             ("sbc g 2", 0x25, 0x00, Flags::ZF | Flags::NF),
         ];
+
+        // 0x25 - 0x25 - set half-carry or not?
+        // As 8-bit addition of 2C:
+        //     0b0010_0101
+        // +   0b1101_1011 (!0x25 +1)
+        // = 0b1_0000_0000
+        // As 4-bit subtraction of 0x05 and (zero) carry:
+        //     0b0101
+        // -   0b0101
+        // =   0b0000 no carry, no half-carry
 
         for (desc, a, val, flags) in &expected {
             cpu.write_reg(Register::A, *a);

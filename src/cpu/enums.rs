@@ -12,6 +12,7 @@ pub enum Register {
     E,
     H,
     L,
+    AF,
     BC,
     DE,
     HL,
@@ -149,20 +150,21 @@ impl From<RegIndex> for Register {
     }
 }
 
+/// The source or destination operand
 #[allow(dead_code)]
-pub(super) enum Addressing {
+pub(super) enum Operand {
     Direct(Register),
     Indirect(RegIndirect),
     Indexed(RegIndex),
     Extended(),
+    Extended16(),
     Immediate(),
     Immediate16(),
     Relative(),
 }
 
-#[repr(u8)]
-enum Condition {
-    NonZero = 0,
+pub(super) enum Condition {
+    NonZero,
     Zero,
     NonCarry,
     Carry,

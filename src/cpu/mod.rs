@@ -14,6 +14,7 @@ mod iops;
 mod ld_16bit;
 mod ld_8bit;
 mod special;
+mod stack;
 
 // instruction decode and dispatch
 mod dispatch;
@@ -23,15 +24,15 @@ mod mmu;
 
 use enums::*;
 
-#[derive(Debug)]
-enum Mode {
+#[derive(Debug, PartialEq)]
+pub enum Mode {
     Reset,
     OpCodeFetch,
     //IntAckNMI,
     //IntAckINT0,
     //IntAckOther,
     //BusRelease,
-    //Halt,
+    Halt,
     //Sleep,
     //DMARead,
     //DMAWrite,
@@ -71,6 +72,11 @@ pub struct CPU {
 }
 
 impl CPU {
+    const FLAG_C: u8 = 0b0000_0001;
+    const FLAG_P: u8 = 0b0000_0100;
+    const FLAG_Z: u8 = 0b0100_0000;
+    const FLAG_S: u8 = 0b1000_0000;
+
     // Create a new CPU. The CPU will be held in reset initially.
     pub fn new(bus: &mut Bus) -> CPU {
         let mmu = Rc::new(mmu::MMU::new());
@@ -129,6 +135,7 @@ impl CPU {
             Register::E => self.gr.de & 0xff,
             Register::H => self.gr.hl >> 8,
             Register::L => self.gr.hl & 0xff,
+            Register::AF => (self.gr.a as u16) << 8 | self.gr.f as u16,
             Register::BC => self.gr.bc,
             Register::DE => self.gr.de,
             Register::HL => self.gr.hl,
@@ -152,6 +159,10 @@ impl CPU {
             Register::E => self.gr.de = (self.gr.de & 0xff00) | (v & 0xff),
             Register::H => self.gr.hl = (self.gr.hl & 0xff) | v << 8,
             Register::L => self.gr.hl = (self.gr.hl & 0xff00) | (v & 0xff),
+            Register::AF => {
+                self.gr.a = (v >> 8) as u8;
+                self.gr.f = v as u8;
+            }
             Register::BC => self.gr.bc = v,
             Register::DE => self.gr.de = v,
             Register::HL => self.gr.hl = v,
@@ -170,51 +181,108 @@ impl CPU {
         match self.mode {
             Mode::Reset => (),
             Mode::OpCodeFetch => self.dispatch(bus),
-            //Mode::OpCodeFetch(opcode) => self.decode(opcode),
+            Mode::Halt => (),
         }
     }
 
     // enter an error state
     fn error(&mut self) {
-        self.mode = Mode::Reset;
-        println!("Illegal instruction. Halt.");
+        self.mode = Mode::Halt;
+        println!("Illegal instruction (PC=${:04x}). Halt.", self.sr.pc);
     }
 
     // Load an operand using an addressing mode. Will adjust PC as needed.
-    fn load_operand(&mut self, bus: &mut Bus, address: Addressing) -> u16 {
-        match address {
-            Addressing::Direct(reg) => self.reg(reg),
-            Addressing::Indirect(reg) => bus.mem_read(self.mmu.to_physical(self.reg(reg))) as u16,
-            Addressing::Indexed(reg) => {
+    fn load_operand(&mut self, bus: &mut Bus, operand: Operand) -> u16 {
+        match operand {
+            Operand::Direct(reg) => self.reg(reg),
+            Operand::Indirect(reg) => bus.mem_read(self.mmu.to_physical(self.reg(reg))) as u16,
+            Operand::Indexed(reg) => {
                 let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
                 let addr = self.reg(reg) as i32 + d as i32;
                 self.sr.pc += 1;
                 bus.mem_read(self.mmu.to_physical(addr as u16)) as u16
             }
-            Addressing::Extended() => {
+            Operand::Extended() => {
                 let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
                 let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
                 bus.mem_read(self.mmu.to_physical(addr)) as u16
             }
-            Addressing::Immediate() => {
+            Operand::Extended16() => {
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let addr = m << 8 | n;
+                self.sr.pc += 2;
+                let lo = bus.mem_read(self.mmu.to_physical(addr)) as u16;
+                let hi = bus.mem_read(self.mmu.to_physical(addr + 1)) as u16;
+                hi << 8 | lo
+            }
+            Operand::Immediate() => {
                 let m = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
                 self.sr.pc += 1;
                 m
             }
-            Addressing::Immediate16() => {
+            Operand::Immediate16() => {
                 let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
                 let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
                 addr
             }
-            Addressing::Relative() => {
+            Operand::Relative() => {
                 let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
                 self.sr.pc += 1;
                 (self.sr.pc as i32 + d as i32) as u16
             }
+        }
+    }
+
+    // Store a result into an operand. This will halt the CPU on Immediate or Relative.
+    fn store_operand(&mut self, bus: &mut Bus, operand: Operand, value: u16) {
+        match operand {
+            Operand::Direct(reg) => self.write_reg(reg, value),
+            Operand::Indirect(reg) => {
+                bus.mem_write(self.mmu.to_physical(self.reg(reg)), value as u8)
+            }
+            Operand::Indexed(reg) => {
+                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
+                let addr = self.reg(reg) as i32 + d as i32;
+                self.sr.pc += 1;
+                bus.mem_write(self.mmu.to_physical(addr as u16), value as u8);
+            }
+            Operand::Extended() => {
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let addr = m << 8 | n;
+                self.sr.pc += 2;
+                bus.mem_write(self.mmu.to_physical(addr), value as u8);
+            }
+            Operand::Extended16() => {
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let addr = m << 8 | n;
+                self.sr.pc += 2;
+                bus.mem_write(self.mmu.to_physical(addr), value as u8);
+                bus.mem_write(self.mmu.to_physical(addr + 1), (value >> 8) as u8);
+            }
+            Operand::Immediate() => self.error(),
+            Operand::Immediate16() => self.error(),
+            Operand::Relative() => self.error(),
+        }
+    }
+
+    fn is_condition(&self, condition: Option<Condition>) -> bool {
+        match condition {
+            Some(Condition::NonZero) => self.gr.f & CPU::FLAG_Z == 0,
+            Some(Condition::Zero) => self.gr.f & CPU::FLAG_Z != 0,
+            Some(Condition::NonCarry) => self.gr.f & CPU::FLAG_C == 0,
+            Some(Condition::Carry) => self.gr.f & CPU::FLAG_C != 0,
+            Some(Condition::ParityOdd) => self.gr.f & CPU::FLAG_P == 0,
+            Some(Condition::ParityEven) => self.gr.f & CPU::FLAG_P != 0,
+            Some(Condition::SignPlus) => self.gr.f & CPU::FLAG_S == 0,
+            Some(Condition::SignMinus) => self.gr.f & CPU::FLAG_S != 0,
+            None => true,
         }
     }
 
@@ -247,14 +315,63 @@ impl CPU {
 
 #[cfg(test)]
 mod cpu_test {
-    // TODO test addressing stuff
+    use std::rc::Rc;
+
+    use crate::bus::Bus;
+    use crate::cpu::{Peripheral, CPU};
+    use crate::ram::RAM;
+
+    struct CIO {}
+
+    impl Peripheral for CIO {
+        fn io_write(&self, address: u16, data: u8) {
+            if address == 0xff {
+                print!("{}", data as char);
+            }
+        }
+    }
+
     #[test]
-    fn signs() {
-        // how does Rust handle "u16 as i32" conversion?
-        let x: u16 = 0xffff;
-        let y: i32 = x as i32;
-        let d: i8 = -15;
-        let z = (y + d as i32) as u16;
-        assert_eq!(z, 0xfff0);
+    fn zexdoc() {
+        let mut bus = Bus::new();
+        let mut cpu = CPU::new(&mut bus);
+        let ram = Rc::new(RAM::new(0x0000, 0x10000));
+        // CPM control
+        ram.write(
+            0x0,
+            &[
+                0xC3, 0x1E, 0x00, //            JP   boot
+                0x00, //                        NOP
+                0x00, //                        NOP
+                0x3E, 0x02, //        CPM:      LD   a,2
+                0xB9, //                        CP   c
+                0xCA, 0x1A, 0x00, //            JP   z,oute
+                0x60, 0x69, //                  LD   hl,bc
+                0x7E, //              LOOP:     LD   a,(hl)
+                0xFE, 0x24, //                  CP   '$'
+                0xCA, 0x1D, 0x00, //            JP   z,done
+                0xED, 0x39, 0xFF, //            OUT0 (0xff), a
+                0x23, //                        INC   hl
+                0xC3, 0x0D, 0x00, //            JP   loop
+                0xED, 0x09, 0xFF, //  OUTE:     OUT0 (0xff), c
+                0xC9, //              DONE:     RET
+                0x21, 0x00, 0x00, //  BOOT:     LD   hl,0
+                0x36, 0x76, //                  LD   (hl),0x76 ; HALT
+                0xC3, 0x00, 0x01, //            JP   0x100
+            ],
+        );
+        ram.load_file(0x100, "test/zexdoc.com")
+            .expect("Loading ZEXDOC test binary");
+        bus.add(ram.clone());
+
+        // Run until HALT is executed
+        cpu.reset();
+        loop {
+            println!("Cycling CPU at PC=${:04x}", cpu.sr.pc);
+            cpu.cycle(&mut bus);
+            if cpu.mode == crate::cpu::Mode::Halt {
+                break;
+            }
+        }
     }
 }
