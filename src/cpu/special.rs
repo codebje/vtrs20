@@ -10,4 +10,12 @@ impl CPU {
     pub(super) fn nop(&mut self) {
         self.sr.pc += 1;
     }
+
+    pub(super) fn di(&mut self) {
+        self.ie = false;
+    }
+
+    pub(super) fn ei(&mut self) {
+        self.ie = true;
+    }
 }

@@ -9,10 +9,12 @@ pub mod enums;
 // instruction set
 mod alu;
 mod alu16;
+mod block;
 mod ctrl;
 mod iops;
 mod ld_16bit;
 mod ld_8bit;
+mod rot;
 mod special;
 mod stack;
 
@@ -69,6 +71,7 @@ pub struct CPU {
     gr: GR,
     gr_: GR,
     sr: SR,
+    ie: bool,
 }
 
 impl CPU {
@@ -106,6 +109,7 @@ impl CPU {
                 sp: 0x0000,
                 pc: 0x0000,
             },
+            ie: false,
         }
     }
 
@@ -186,9 +190,10 @@ impl CPU {
     }
 
     // enter an error state
-    fn error(&mut self) {
+    fn error(&mut self, cause: &str) {
         self.mode = Mode::Halt;
-        println!("Illegal instruction (PC=${:04x}). Halt.", self.sr.pc);
+        self.sr.pc -= 1;
+        println!("Illegal instruction (PC=${:04x}). Halt. {}", self.sr.pc, cause);
     }
 
     // Load an operand using an addressing mode. Will adjust PC as needed.
@@ -264,9 +269,9 @@ impl CPU {
                 bus.mem_write(self.mmu.to_physical(addr), value as u8);
                 bus.mem_write(self.mmu.to_physical(addr + 1), (value >> 8) as u8);
             }
-            Operand::Immediate() => self.error(),
-            Operand::Immediate16() => self.error(),
-            Operand::Relative() => self.error(),
+            Operand::Immediate() => self.error("store imm"),
+            Operand::Immediate16() => self.error("store imm"),
+            Operand::Relative() => self.error("store rel"),
         }
     }
 
@@ -281,32 +286,6 @@ impl CPU {
             Some(Condition::SignPlus) => self.gr.f & CPU::FLAG_S == 0,
             Some(Condition::SignMinus) => self.gr.f & CPU::FLAG_S != 0,
             None => true,
-        }
-    }
-
-    fn load_ghl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U) -> u8 {
-        match g.into() {
-            RegGHL::B => ((self.gr.bc & 0xff00) >> 8) as u8,
-            RegGHL::C => (self.gr.bc & 0x00ff) as u8,
-            RegGHL::D => ((self.gr.de & 0xff00) >> 8) as u8,
-            RegGHL::E => (self.gr.de & 0x00ff) as u8,
-            RegGHL::H => ((self.gr.hl & 0xff00) >> 8) as u8,
-            RegGHL::L => (self.gr.hl & 0x00ff) as u8,
-            RegGHL::HL => bus.mem_read(self.mmu.to_physical(self.gr.hl)),
-            RegGHL::A => self.gr.a,
-        }
-    }
-
-    fn store_ghl<U: Into<RegGHL>>(&mut self, bus: &mut Bus, g: U, v: u8) {
-        match g.into() {
-            RegGHL::B => self.gr.bc = (self.gr.bc & 0x00ff) | ((v as u16) << 8),
-            RegGHL::C => self.gr.bc = (self.gr.bc & 0xff00) | (v as u16),
-            RegGHL::D => self.gr.de = (self.gr.de & 0x00ff) | ((v as u16) << 8),
-            RegGHL::E => self.gr.de = (self.gr.de & 0xff00) | (v as u16),
-            RegGHL::H => self.gr.hl = (self.gr.hl & 0x00ff) | ((v as u16) << 8),
-            RegGHL::L => self.gr.hl = (self.gr.hl & 0xff00) | (v as u16),
-            RegGHL::HL => bus.mem_write(self.mmu.to_physical(self.gr.hl), v),
-            RegGHL::A => self.gr.a = v,
         }
     }
 }
@@ -397,9 +376,9 @@ mod cpu_test {
         // Run until HALT is executed
         cpu.reset();
         loop {
-            print_cpu(&cpu, &mut bus);
             cpu.cycle(&mut bus);
             if cpu.mode == crate::cpu::Mode::Halt {
+                print_cpu(&cpu, &mut bus);
                 break;
             }
         }

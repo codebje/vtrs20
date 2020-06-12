@@ -1,3 +1,5 @@
+use std::num::Wrapping;
+
 use crate::bus::Bus;
 use crate::cpu::enums::*;
 use crate::cpu::CPU;
@@ -60,32 +62,34 @@ impl CPU {
         }
     }
 
-    // Execute INC g or INC (HL)
-    pub(super) fn inc_ghl(&mut self, bus: &mut Bus, g: RegGHL) {
-        let val = self.load_ghl(bus, g) as u16;
-        let result = val + 1;
-
-        // flags set like add, but preserve CF
-        let flags = CPU::add_flags(val as u16, 1, result as u16) & 0b1111_1110;
+    pub(super) fn dec(&mut self, bus: &mut Bus, src: Operand) {
+        let operand = Wrapping(self.load_operand(bus, src));
+        let result = (operand - Wrapping(1)).0;
+        self.store_operand(bus, src, result);
+        let flags = CPU::add_flags(operand.0, 1, result) & 0b1111_1100 | 0b0000_0010;
         self.gr.f = flags | (self.gr.f & 0b1);
-
-        self.store_ghl(bus, g, result as u8);
     }
 
-    // Logic: AND g, AND (HL)
-    pub(super) fn and_a_ghl(&mut self, bus: &mut Bus, g: RegGHL) {
-        let val = self.load_ghl(bus, g) as u16;
-        let result = self.reg(Register::A) & val;
+    pub(super) fn inc(&mut self, bus: &mut Bus, src: Operand) {
+        let operand = Wrapping(self.load_operand(bus, src));
+        let result = (operand + Wrapping(1)).0;
+        self.store_operand(bus, src, result);
+        let flags = CPU::add_flags(operand.0, 1, result) & 0b1111_1110;
+        self.gr.f = flags | (self.gr.f & 1);
+    }
+
+    pub(super) fn and_a(&mut self, bus: &mut Bus, operand: Operand) {
+        let data = self.load_operand(bus, operand);
+        let result = self.reg(Register::A) & data;
         self.gr.f = CPU::and_flags(result);
         self.gr.a = result as u8;
     }
 
-    pub(super) fn and_a_m(&mut self, bus: &mut Bus) {
-        let m = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
-        let result = self.reg(Register::A) & m;
-        self.gr.f = CPU::and_flags(result);
+    pub(super) fn or_a(&mut self, bus: &mut Bus, operand: Operand) {
+        let data = self.load_operand(bus, operand);
+        let result = self.reg(Register::A) | data;
+        self.gr.f = CPU::and_flags(result) & !0b0001_0000;
         self.gr.a = result as u8;
-        self.sr.pc += 1;
     }
 }
 

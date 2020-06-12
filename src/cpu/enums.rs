@@ -43,19 +43,6 @@ bitflags! {
 
 }
 
-// `ggg` bitfield register decode, plus 0b110 = HL
-#[derive(Copy, Clone, Debug)]
-pub(super) enum RegGHL {
-    B = 0b000,
-    C = 0b001,
-    D = 0b010,
-    E = 0b011,
-    H = 0b100,
-    L = 0b101,
-    HL = 0b110,
-    A = 0b111,
-}
-
 // `ww` bitfield register decode
 #[derive(Copy, Clone)]
 pub(super) enum RegW {
@@ -112,6 +99,7 @@ impl From<RegIndex> for Register {
 
 /// The source or destination operand
 #[allow(dead_code)]
+#[derive(Debug, Copy, Clone)]
 pub(super) enum Operand {
     Direct(Register),
     Indirect(RegIndirect),
@@ -150,4 +138,15 @@ impl TryFrom<u8> for Condition {
             _ => Err(()),
         }
     }
+}
+
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+pub(super) enum Exchange {
+    AF_AFs,
+    DE_HL,
+    X,
+    SP_HL,
+    SP_IX,
+    SP_IY,
 }

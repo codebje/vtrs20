@@ -8,16 +8,6 @@ use crate::cpu::CPU;
  */
 
 impl CPU {
-    // Execute INC ww
-    pub(super) fn inc_ww(&mut self, ww: RegW) {
-        match ww {
-            RegW::BC => self.gr.bc = (self.gr.bc as u32 + 1) as u16,
-            RegW::DE => self.gr.de = (self.gr.de as u32 + 1) as u16,
-            RegW::HL => self.gr.hl = (self.gr.hl as u32 + 1) as u16,
-            RegW::SP => self.sr.sp = (self.sr.sp as u32 + 1) as u16,
-        }
-    }
-
     pub(super) fn add_hl_ww(&mut self, ww: RegW) {
         let value = self.reg(ww) as u32;
         let hl = self.gr.hl as u32;
@@ -26,6 +16,18 @@ impl CPU {
 
         // Half-carry: undefined; Negative: reset; Carry: modified; Others: unchanged
         self.gr.f = (self.gr.f & 0b1111_1100) | ((result >> 16) & 0b0000_0001) as u8;
+    }
+
+    pub(super) fn sub_hl_ww(&mut self, ww: RegW, borrow: bool) {
+        let carry = if borrow { self.gr.f & 1 } else { 0 };
+        let operand = self.reg(ww) as i32;
+        let result = self.gr.hl as i32 - operand - carry as i32;
+
+        self.gr.f = (result & 0b1000_0000_0000_0000 >> 8) as u8
+            | (if (result & 0xffff) == 0 { 0b0100_0000 } else { 0 }) as u8
+            | (((self.gr.hl ^ operand as u16 ^ result as u16) & (self.gr.hl ^ result as u16)) >> 13) as u8
+            | (result as u32 >> 16 & 1) as u8;
+        self.gr.hl = result as u16;
     }
 }
 
