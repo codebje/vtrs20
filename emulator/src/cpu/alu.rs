@@ -91,6 +91,13 @@ impl CPU {
         self.gr.f = CPU::and_flags(result) & !0b0001_0000;
         self.gr.a = result as u8;
     }
+
+    pub(super) fn xor_a(&mut self, bus: &mut Bus, operand: Operand) {
+        let data = self.load_operand(bus, operand);
+        let result = self.reg(Register::A) ^ data;
+        self.gr.f = CPU::and_flags(result) & !0b0001_0000;
+        self.gr.a = result as u8;
+    }
 }
 
 #[cfg(test)]

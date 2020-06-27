@@ -8,14 +8,25 @@ use crate::cpu::CPU;
  */
 
 impl CPU {
-    pub(super) fn add_hl_ww(&mut self, ww: RegW) {
+    pub(super) fn add_hl_ww(&mut self, ww: RegW, with_carry: bool) {
+        let carry = if with_carry { self.gr.f & 1 } else { 0 };
         let value = self.reg(ww) as u32;
         let hl = self.gr.hl as u32;
-        let result = hl + value;
-        self.gr.hl = result as u16;
+        let result = hl + value + carry as u32;
 
-        // Half-carry: undefined; Negative: reset; Carry: modified; Others: unchanged
-        self.gr.f = (self.gr.f & 0b1111_1100) | ((result >> 16) & 0b0000_0001) as u8;
+        // For no reason ADC HL, ww sets SF, ZF, V; ADD HL, ww does not.
+        if with_carry {
+            let signs = (self.gr.hl ^ value as u16 ^ 0b1000_0000_0000_0000) & (self.gr.hl ^ result as u16);
+            self.gr.f = ((result & 0b1000_0000_0000_0000) >> 8) as u8
+                | (if (result & 0xffff) == 0 { 0b0100_0000 } else { 0 }) as u8
+                | ((signs >> 13) & 0b0000_0100) as u8
+                | ((result >> 16) & 1) as u8;
+        } else {
+            // Half-carry: undefined; Negative: reset; Carry: modified; Others: unchanged
+            self.gr.f = (self.gr.f & 0b1111_1100) | ((result >> 16) & 0b0000_0001) as u8;
+        }
+
+        self.gr.hl = result as u16;
     }
 
     pub(super) fn sub_hl_ww(&mut self, ww: RegW, borrow: bool) {
@@ -83,14 +94,20 @@ mod alu_test {
         ram.write(
             0x0000,
             &[
-                0x01, 0x99, 0x14, //    0x0000  ld bc, $1499
-                0x11, 0xff, 0x3f, //    0x0003  ld de, $3fff
-                0x21, 0xff, 0x7f, //    0x0006  ld hl, $7fff
-                0x31, 0x11, 0x11, //    0x0009  ld sp, $1111
-                0x09, //                0x000c  add hl, bc
-                0x19, //                0x000d  add hl, de
-                0x29, //                0x000e  add hl, hl
-                0x39, //                0x000f  add hl, sp
+                0x01, 0x99, 0x14, //    ld bc, $1499
+                0x11, 0xff, 0x3f, //    ld de, $3fff
+                0x21, 0xff, 0x7f, //    ld hl, $7fff
+                0x31, 0x11, 0x11, //    ld sp, $1111
+                0x09, //                add hl, bc
+                0x19, //                add hl, de
+                0x29, //                add hl, hl
+                0x39, //                add hl, sp
+                0xed, 0x4a, //          adc hl, bc
+                0xed, 0x5a, //          adc hl, de
+                0xed, 0x6a, //          adc hl, hl
+                0xed, 0x7a, //          adc hl, sp
+                0xed, 0x5a, //          adc hl, de
+                0xed, 0x5a, //          adc hl, de
             ],
         );
         bus.add(ram.clone());
@@ -100,16 +117,22 @@ mod alu_test {
         }
 
         let expected = [
-            (Register::BC, 0x9498, Flags::empty()),
-            (Register::DE, 0xd497, Flags::empty()),
-            (Register::HL, 0xa92e, Flags::CF),
-            (Register::SP, 0xba3f, Flags::empty()),
+            ("ADD", Register::BC, 0x9498, Flags::empty()),
+            ("ADD", Register::DE, 0xd497, Flags::empty()),
+            ("ADD", Register::HL, 0xa92e, Flags::CF),
+            ("ADD", Register::SP, 0xba3f, Flags::empty()),
+            ("ADC", Register::BC, 0xced8, Flags::SF),
+            ("ADC", Register::DE, 0x0ed7, Flags::CF),
+            ("ADC", Register::HL, 0x1daf, Flags::empty()),
+            ("ADC", Register::SP, 0x2ec0, Flags::empty()),
+            ("ADC", Register::BC, 0x6ebf, Flags::empty()),
+            ("ADC", Register::BC, 0xaebe, Flags::SF | Flags::VF),
         ];
 
-        for (reg, val, flags) in &expected {
+        for (op, reg, val, flags) in &expected {
             cpu.cycle(&mut bus);
-            assert_eq!(cpu.gr.hl, *val, "ADD HL, {}", *reg);
-            assert_eq!(cpu.flags(), *flags);
+            assert_eq!(cpu.gr.hl, *val, "{} HL, {}", *op, *reg);
+            assert_eq!(cpu.flags(), *flags, "{} HL, {}", *op, *reg);
         }
     }
 }

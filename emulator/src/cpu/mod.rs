@@ -292,7 +292,9 @@ impl CPU {
 
 #[cfg(test)]
 mod cpu_test {
+    use std::io::{stdout, Write};
     use std::rc::Rc;
+    use std::{thread, time};
 
     use crate::bus::Bus;
     use crate::cpu::{Peripheral, CPU};
@@ -310,20 +312,28 @@ mod cpu_test {
         fn io_write(&self, address: u16, data: u8) {
             if address == 0xff {
                 print!("{}", data as char);
+                stdout().flush().unwrap();
             }
         }
     }
 
     #[allow(dead_code)]
     fn print_cpu(cpu: &CPU, bus: &mut Bus) {
-        let opcode = bus.mem_read(cpu.sr.pc as u32); // assume identity MMU
+        let opcodes = [
+            bus.mem_read(cpu.sr.pc as u32), // assume identity MMU
+            bus.mem_read(cpu.sr.pc as u32 + 1),
+            bus.mem_read(cpu.sr.pc as u32 + 2),
+            bus.mem_read(cpu.sr.pc as u32 + 3),
+            bus.mem_read(cpu.sr.pc as u32 + 4),
+            bus.mem_read(cpu.sr.pc as u32 + 5),
+        ];
         println!(
             "PC=${:04x}, opcode=${:02x} (0b{:08b}) \
                 A=${:02x} BC=${:04x} DE=${:04x} HL=${:04x} \
-                {}{}-{}-{}{}{}",
+                {}{}-{}-{}{}{}    {}",
             cpu.sr.pc,
-            opcode,
-            opcode,
+            opcodes[0],
+            opcodes[0],
             cpu.gr.a,
             cpu.gr.bc,
             cpu.gr.de,
@@ -334,6 +344,7 @@ mod cpu_test {
             if cpu.gr.f & 0b0000_0100 != 0 { 'P' } else { 'p' },
             if cpu.gr.f & 0b0000_0010 != 0 { 'N' } else { 'n' },
             if cpu.gr.f & 0b0000_0001 != 0 { 'C' } else { 'c' },
+            crate::disasm::disasm(&opcodes),
         );
     }
 
@@ -359,14 +370,14 @@ mod cpu_test {
                 0xED, 0x39, 0xFF, //            OUT0 (0xff), a
                 0x23, //                        INC   hl
                 0xC3, 0x0D, 0x00, //            JP   loop
-                0xED, 0x09, 0xFF, //  OUTE:     OUT0 (0xff), c
+                0xED, 0x19, 0xFF, //  OUTE:     OUT0 (0xff), e
                 0xC9, //              DONE:     RET
                 0x21, 0x00, 0x00, //  BOOT:     LD   hl,0
                 0x36, 0x76, //                  LD   (hl),0x76 ; HALT
                 0xC3, 0x00, 0x01, //            JP   0x100
             ],
         );
-        ram.load_file(0x100, "test/zexdoc.com")
+        ram.load_file(0x100, "tests/zexdoc.com")
             .expect("Loading ZEXDOC test binary");
         bus.add(ram.clone());
 
@@ -375,8 +386,66 @@ mod cpu_test {
 
         // Run until HALT is executed
         cpu.reset();
+        let mut loops = 0u64;
+        let mut now = time::Instant::now();
         loop {
             cpu.cycle(&mut bus);
+            if cpu.sr.pc == 0x122 {
+                if loops > 0 {
+                    println!("Test complete in {}s", now.elapsed().as_secs());
+                    now = time::Instant::now();
+                }
+                // test completed
+                loops = 0;
+            }
+            // test loop
+            if cpu.sr.pc == 0x1b27 {
+                loops = loops + 1;
+            }
+            // shifter fired
+            if cpu.sr.pc == 0xfcad {
+                let data = [
+                    // iut
+                    bus.mem_read(0x1d42),
+                    bus.mem_read(0x1d43),
+                    bus.mem_read(0x1d44),
+                    bus.mem_read(0x1d45),
+                    // msbt
+                    bus.mem_read(0x103),
+                    bus.mem_read(0x104),
+                    bus.mem_read(0x105),
+                    bus.mem_read(0x106),
+                    bus.mem_read(0x107),
+                    bus.mem_read(0x108),
+                    bus.mem_read(0x109),
+                    bus.mem_read(0x10a),
+                    bus.mem_read(0x10b),
+                    bus.mem_read(0x10c),
+                    bus.mem_read(0x10d),
+                    bus.mem_read(0x10e),
+                    bus.mem_read(0x10f),
+                    bus.mem_read(0x110),
+                    bus.mem_read(0x111),
+                    bus.mem_read(0x112),
+                ];
+                print!("#{:05}  ", loops);
+                print!(
+                    "uit=${:02x} ${:02x} ${:02x} ${:02x} ",
+                    data[0], data[1], data[2], data[3],
+                );
+                print!(
+                    "memop=${:02x}{:02x} iy=${:02x}{:02x} ix=${:02x}{:02x} hl=${:02x}{:02x} de=${:02x}{:02x} ",
+                    data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13]
+                );
+                print!(
+                    "bc=${:02x}{:02x} a=${:02x} f=${:02x} sp=${:02x}{:02x} ",
+                    data[14], data[15], data[16], data[17], data[18], data[19]
+                );
+                println!("   {}", crate::disasm::disasm(&data));
+                if data[10] == 0x39 && data[11] == 0xb3 {
+                    thread::sleep(time::Duration::from_secs(1));
+                }
+            }
             if cpu.mode == crate::cpu::Mode::Halt {
                 print_cpu(&cpu, &mut bus);
                 break;

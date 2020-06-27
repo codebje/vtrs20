@@ -1,0 +1,14 @@
+[package]
+name = "zextest"
+version = "0.1.0"
+authors = ["Byron Ellacott <code@bje.id.au>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.31", features = ["extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0.18"
+zexrunner = { path = "../zexrunner" }
