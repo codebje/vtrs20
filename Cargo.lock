@@ -11,6 +11,7 @@ name = "emulator"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "zexrunner",
 ]
 
 [[package]]
@@ -60,6 +61,7 @@ dependencies = [
 name = "zexrunner"
 version = "0.1.0"
 dependencies = [
+ "emulator",
  "proc-macro2",
  "quote",
  "syn",

@@ -44,7 +44,7 @@ bitflags! {
 }
 
 // `ww` bitfield register decode
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(super) enum RegW {
     BC = 0b00,
     DE = 0b01,

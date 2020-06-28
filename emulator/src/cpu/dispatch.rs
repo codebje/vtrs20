@@ -7,8 +7,6 @@ impl CPU {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
         self.sr.pc += 1;
 
-        //println!("Opcode is ${:02x} (0b{:08b})", opcode, opcode);
-
         // The full 256 opcode values are listed explicitly to allow a jump table to be
         // generated. It would be possible to use bitmasks to reduce the size of this list,
         // but doing so would significantly reduce the efficiency of the dispatcher.

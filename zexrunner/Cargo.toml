@@ -10,3 +10,4 @@ edition = "2018"
 quote = "1.0"
 proc-macro2 = "1.0.18"
 syn = "1.0.31"
+emulator = { path = "../emulator" }

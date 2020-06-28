@@ -1,6 +1,11 @@
 use proc_macro2::{Literal, Punct, Spacing, Span};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::Ident;
+use std::rc::Rc;
+
+use emulator::cpu::{Register, CPU};
+use emulator::bus::{Bus, Peripheral};
+use emulator::ram::RAM;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ZexState {
@@ -48,15 +53,93 @@ impl ToTokens for ZexState {
     }
 }
 
-// Step the CPU through the instruction(s) in state
-// TODO: memory contents, crcs, whatnot
-pub fn zex_execute(_state: &mut ZexState, _mask: u8) {
-    // load the state into the appropriate address (&msbt)
-    // initialise the cpu's state
-    // run the four bytes of instruction
-    //    (avoid 0x76 and (i&0xdf) == 0xdd, 0x76) which covers IX-halt, IY-halt and halt
-    // extract the cpu's "after" state
-    // mask off flag
+// Execute one instruction with a specific CPU state, returning an updated CRC
+pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
+    let mut bus = Bus::new();
+    let mut cpu = CPU::new(&mut bus);
+    let ram = Rc::new(RAM::new(0x0000, 0x10000));
+    bus.add(ram.clone());
+
+    ram.write(
+        0x103,
+        &[
+            (state.operand >> 8) as u8,
+            state.operand as u8,
+            (state.iy >> 8) as u8,
+            state.iy as u8,
+            (state.ix >> 8) as u8,
+            state.ix as u8,
+            (state.hl >> 8) as u8,
+            state.hl as u8,
+            (state.de >> 8) as u8,
+            state.de as u8,
+            (state.bc >> 8) as u8,
+            state.bc as u8,
+            state.a,
+            state.f,
+            (state.sp >> 8) as u8,
+            state.sp as u8,
+            (state.instruction >> 24) as u8,
+            (state.instruction >> 16) as u8,
+            (state.instruction >> 8) as u8,
+            (state.instruction >> 0) as u8,
+        ]
+    );
+
+    // Set up the CPU
+    cpu.reset();
+    cpu.write_reg(Register::SP, state.sp);
+    cpu.write_reg(Register::A, state.a as u16);
+    cpu.write_reg(Register::F, state.f as u16);
+    cpu.write_reg(Register::BC, state.bc);
+    cpu.write_reg(Register::DE, state.de);
+    cpu.write_reg(Register::HL, state.hl);
+    cpu.write_reg(Register::IX, state.ix);
+    cpu.write_reg(Register::IY, state.iy);
+    cpu.write_reg(Register::PC, 0x113);
+
+    // Run one instruction
+    cpu.cycle(&mut bus);
+
+    // Update the CRC
+    let mut result = crc;
+    result = updcrc(result, ram.mem_read(0x103).unwrap_or(0));
+    result = updcrc(result, ram.mem_read(0x104).unwrap_or(0));
+    result = updcrc(result, (cpu.reg(Register::IY) >> 0) as u8);
+    result = updcrc(result, (cpu.reg(Register::IY) >> 8) as u8);
+    result = updcrc(result, (cpu.reg(Register::IX) >> 0) as u8);
+    result = updcrc(result, (cpu.reg(Register::IX) >> 8) as u8);
+    result = updcrc(result, (cpu.reg(Register::HL) >> 0) as u8);
+    result = updcrc(result, (cpu.reg(Register::HL) >> 8) as u8);
+    result = updcrc(result, (cpu.reg(Register::DE) >> 0) as u8);
+    result = updcrc(result, (cpu.reg(Register::DE) >> 8) as u8);
+    result = updcrc(result, (cpu.reg(Register::BC) >> 0) as u8);
+    result = updcrc(result, (cpu.reg(Register::BC) >> 8) as u8);
+    result = updcrc(result, cpu.reg(Register::F) as u8 & mask);
+    result = updcrc(result, cpu.reg(Register::A) as u8);
+    result = updcrc(result, (cpu.reg(Register::SP) >> 0) as u8);
+    result = updcrc(result, (cpu.reg(Register::SP) >> 8) as u8);
+
+    result
+}
+
+#[test]
+fn exec_tests() {
+    // test that an SBC HL,DE
+    let state = ZexState {
+        instruction: 0xed420000,
+        operand: 0x2c83,
+        iy: 0x4f88,
+        ix: 0xf22b,
+        hl: 0xb339,
+        de: 0x7e1f,
+        bc: 0x1563,
+        f: 0xd3,
+        a: 0x89,
+        sp: 0x465e,
+    };
+
+    assert_eq!(zex_execute(&state, 0xff, 0xffffffff), 0xd3b0fb71, "CRC is correct");
 }
 
 //pub fn add_counter(state: &ZexState
@@ -70,37 +153,17 @@ pub fn zex_execute(_state: &mut ZexState, _mask: u8) {
 //   (hl) = 1 << popcnt() & 0x7
 //
 
-pub fn crc_state(crcval: u32, state: &ZexState) -> u32 {
-    let mut result = crcval;
-
-    result = updcrc(result, (state.instruction >> 24) as u8);
-    result = updcrc(result, (state.instruction >> 16) as u8);
-    result = updcrc(result, (state.instruction >> 8) as u8);
-    result = updcrc(result, (state.instruction >> 0) as u8);
-    result = updcrc(result, (state.operand >> 8) as u8);
-    result = updcrc(result, (state.operand >> 0) as u8);
-    result = updcrc(result, (state.iy >> 8) as u8);
-    result = updcrc(result, (state.iy >> 0) as u8);
-    result = updcrc(result, (state.ix >> 8) as u8);
-    result = updcrc(result, (state.ix >> 0) as u8);
-    result = updcrc(result, (state.hl >> 8) as u8);
-    result = updcrc(result, (state.hl >> 0) as u8);
-    result = updcrc(result, (state.de >> 8) as u8);
-    result = updcrc(result, (state.de >> 0) as u8);
-    result = updcrc(result, (state.bc >> 8) as u8);
-    result = updcrc(result, (state.bc >> 0) as u8);
-    result = updcrc(result, state.f);
-    result = updcrc(result, state.a);
-    result = updcrc(result, (state.sp >> 8) as u8);
-    result = updcrc(result, (state.sp >> 0) as u8);
-
-    result
-}
-
 fn updcrc(crcval: u32, byte: u8) -> u32 {
-    let idx = (crcval as u8 ^ byte) as usize * 4;
+    let idx = (crcval as u8 ^ byte) as usize;
 
     (crcval >> 8) ^ CRCTAB[idx]
+}
+
+#[test]
+fn crctest() {
+    assert_eq!(updcrc(0xffffffff, 0x2c), 0x1f257c91);
+    assert_eq!(updcrc(0x1f257c91, 0x83), 0xf3a65434);
+    assert_eq!(updcrc(0xf3a65434, 0x88), 0xc22459f3);
 }
 
 static CRCTAB: [u32; 256] = [

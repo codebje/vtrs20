@@ -1098,29 +1098,29 @@ test:	push	af              ;                               $1d2a
 	pop	bc
 	pop	af
 	ld	sp,(spbt)
-iut:	ds	4		; max 4 byte instruction under test
-	ld	(spat),sp	; save stack pointer
-	ld	sp,spat
-	push	af		; save other registers
-	push	bc
-	push	de
-	push	hl
-	push	ix
-	push	iy
-	ld	sp,(spsav)	; restore stack pointer
-	ei			; enable interrupts
-	ld	hl,(msbt)	; copy memory operand
-	ld	(msat),hl
-	ld	hl,flgsat	; flags after test
-	ld	a,(hl)
-flgmsk:	and	a,0d7h		; mask-out irrelevant bits (self-modified code!)
-	ld	(hl),a
-	ld	b,16		; total of 16 bytes of state
-	ld	de,msat
-	ld	hl,crcval
-tcrc:	ld	a,(de)
-	inc	de
-	call	updcrc		; accumulate crc of this test case
+iut:	ds	4		; max 4 byte instruction under test             $1d42
+	ld	(spat),sp	; save stack pointer                            $1d46
+	ld	sp,spat         ;                                               $1d4a
+	push	af		; save other registers                          $1d4d
+	push	bc              ;                                               $1d4e
+	push	de              ;                                               $1d4f
+	push	hl              ;                                               $1d50
+	push	ix              ;                                               $1d51
+	push	iy              ;                                               $1d53
+	ld	sp,(spsav)	; restore stack pointer                         $1d55
+	ei			; enable interrupts                             $1d59
+	ld	hl,(msbt)	; copy memory operand                           $1d5a
+	ld	(msat),hl       ;                                               $1d5d
+	ld	hl,flgsat	; flags after test                              $1d60
+	ld	a,(hl)          ;                                               $1d63
+flgmsk:	and	a,0d7h		; mask-out irrelevant bits (self-modified code!)$1d64
+	ld	(hl),a          ;                                               $1d66
+	ld	b,16		; total of 16 bytes of state                    $1d67
+	ld	de,msat         ;                                               $1d69
+	ld	hl,crcval       ;                                               $1d6c
+tcrc:	ld	a,(de)          ;                                               $1d6f
+	inc	de              ;                                               $1d70
+	call	updcrc		; accumulate crc of this test case              $1d71
 	dec	b
 	jp	nz,tcrc
       if	0
@@ -1246,7 +1246,7 @@ cce:	pop	hl
 ; 32-bit crc routine
 ; entry: a contains next byte, hl points to crc
 ; exit:  crc updated
-updcrc:	push	af
+updcrc:	push	af      ;                                               $1e49
 	push	bc
 	push	de
 	push	hl

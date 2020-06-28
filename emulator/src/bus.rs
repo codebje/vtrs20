@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::types::Peripheral;
+pub use crate::types::Peripheral;
 
 pub struct Bus {
     peripherals: Vec<Rc<dyn Peripheral>>,

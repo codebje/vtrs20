@@ -24,7 +24,7 @@ mod dispatch;
 // peripherals
 mod mmu;
 
-use enums::*;
+pub use enums::*;
 
 #[derive(Debug, PartialEq)]
 pub enum Mode {
@@ -330,7 +330,7 @@ mod cpu_test {
         println!(
             "PC=${:04x}, opcode=${:02x} (0b{:08b}) \
                 A=${:02x} BC=${:04x} DE=${:04x} HL=${:04x} \
-                {}{}-{}-{}{}{}    {}",
+                {}{}-{}-{}{}{}   {}",
             cpu.sr.pc,
             opcodes[0],
             opcodes[0],
@@ -344,6 +344,38 @@ mod cpu_test {
             if cpu.gr.f & 0b0000_0100 != 0 { 'P' } else { 'p' },
             if cpu.gr.f & 0b0000_0010 != 0 { 'N' } else { 'n' },
             if cpu.gr.f & 0b0000_0001 != 0 { 'C' } else { 'c' },
+            crate::disasm::disasm(&opcodes),
+        );
+    }
+
+    #[allow(dead_code)]
+    fn print_test(cpu: &CPU, bus: &mut Bus) {
+        let opcodes = [
+            bus.mem_read(0x1d42),
+            bus.mem_read(0x1d43),
+            bus.mem_read(0x1d44),
+            bus.mem_read(0x1d45),
+            bus.mem_read(0x0103),
+            bus.mem_read(0x0104),
+        ];
+        println!(
+            "IUIT={:02x} {:02x} {:02x} {:02x} MEM=${:02x}{:02x} \
+                AF=${:02x}{:02x} BC=${:04x} DE=${:04x} HL=${:04x} IX=${:04x} IY=${:04x} SP=${:04x} \
+                   {}",
+            opcodes[0],
+            opcodes[1],
+            opcodes[2],
+            opcodes[3],
+            opcodes[4],
+            opcodes[5],
+            cpu.gr.a,
+            cpu.gr.f,
+            cpu.gr.bc,
+            cpu.gr.de,
+            cpu.gr.hl,
+            cpu.sr.ix,
+            cpu.sr.iy,
+            cpu.sr.sp,
             crate::disasm::disasm(&opcodes),
         );
     }
@@ -398,9 +430,32 @@ mod cpu_test {
                 // test completed
                 loops = 0;
             }
+            if cpu.sr.pc == 0x1d42 {
+                println!("");
+                print_test(&cpu, &mut bus);
+            }
+            if cpu.sr.pc == 0x1d46 {
+                loops = loops + 1;
+                if loops > 3 {
+                    break;
+                }
+                print_test(&cpu, &mut bus);
+            }
+            // crc updated
+            if cpu.sr.pc == 0x9d74 {
+                let data = [
+                    bus.mem_read(0x1e85),
+                    bus.mem_read(0x1e86),
+                    bus.mem_read(0x1e87),
+                    bus.mem_read(0x1e88),
+                ];
+                print!("crc32 = ${:02x}{:02x}{:02x}{:02x}   ",
+                        data[0], data[1], data[2], data[3]);
+                print_cpu(&cpu, &mut bus);
+            }
             // test loop
             if cpu.sr.pc == 0x1b27 {
-                loops = loops + 1;
+                // loops = loops + 1;
             }
             // shifter fired
             if cpu.sr.pc == 0xfcad {
