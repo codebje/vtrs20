@@ -294,10 +294,10 @@ impl CPU {
 mod cpu_test {
     use std::io::{stdout, Write};
     use std::rc::Rc;
-    use std::{thread, time};
+    use std::time;
 
     use crate::bus::Bus;
-    use crate::cpu::{Peripheral, CPU};
+    use crate::cpu::{Peripheral, CPU, Register};
     use crate::ram::RAM;
 
     struct CIO {}
@@ -349,34 +349,43 @@ mod cpu_test {
     }
 
     #[allow(dead_code)]
-    fn print_test(cpu: &CPU, bus: &mut Bus) {
-        let opcodes = [
+    fn print_test(_cpu: &CPU, bus: &mut Bus) {
+        let data = [
+            // iut:
             bus.mem_read(0x1d42),
             bus.mem_read(0x1d43),
             bus.mem_read(0x1d44),
             bus.mem_read(0x1d45),
-            bus.mem_read(0x0103),
-            bus.mem_read(0x0104),
+            // msbt(hl):
+            bus.mem_read(0x103+6),
+            bus.mem_read(0x103+7),
+            // msat(hl):
+            bus.mem_read(0x1d7d+6),
+            bus.mem_read(0x1d7d+7),
+            // crcval:
+            bus.mem_read(0x1e85),
+            bus.mem_read(0x1e86),
+            bus.mem_read(0x1e87),
+            bus.mem_read(0x1e88),
         ];
         println!(
-            "IUIT={:02x} {:02x} {:02x} {:02x} MEM=${:02x}{:02x} \
-                AF=${:02x}{:02x} BC=${:04x} DE=${:04x} HL=${:04x} IX=${:04x} IY=${:04x} SP=${:04x} \
-                   {}",
-            opcodes[0],
-            opcodes[1],
-            opcodes[2],
-            opcodes[3],
-            opcodes[4],
-            opcodes[5],
-            cpu.gr.a,
-            cpu.gr.f,
-            cpu.gr.bc,
-            cpu.gr.de,
-            cpu.gr.hl,
-            cpu.sr.ix,
-            cpu.sr.iy,
-            cpu.sr.sp,
-            crate::disasm::disasm(&opcodes),
+            "Test state: instr={:02x}{:02x}{:02x}{:02x} hl={:02x}{:02x}->{:02x}{:02x} crc={:02x}{:02x}{:02x}{:02x}",
+            // iut
+            data[0],
+            data[1],
+            data[2],
+            data[3],
+            // msbt(hl) (byteorder swap)
+            data[5],
+            data[4],
+            // msat(hl) (byteorder swap)
+            data[7],
+            data[6],
+            // crcval
+            data[8],
+            data[9],
+            data[10],
+            data[11],
         );
     }
 
@@ -422,84 +431,35 @@ mod cpu_test {
         let mut now = time::Instant::now();
         loop {
             cpu.cycle(&mut bus);
+            if cpu.sr.pc == 0x1b24 {
+                println!("");
+            }
             if cpu.sr.pc == 0x122 {
                 if loops > 0 {
-                    println!("Test complete in {}s", now.elapsed().as_secs());
+                    println!("Test completed {} iterations in {}s", loops, now.elapsed().as_secs());
                     now = time::Instant::now();
                 }
                 // test completed
                 loops = 0;
             }
-            if cpu.sr.pc == 0x1d42 {
-                println!("");
+/*            if cpu.sr.pc == 0x1cad {
+                println!("Shifter called");
+            }
+            if cpu.sr.pc == 0x1d7c {
                 print_test(&cpu, &mut bus);
             }
-            if cpu.sr.pc == 0x1d46 {
-                loops = loops + 1;
-                if loops > 3 {
-                    break;
-                }
-                print_test(&cpu, &mut bus);
-            }
-            // crc updated
-            if cpu.sr.pc == 0x9d74 {
+            */
+            if cpu.sr.pc == 0x1b27 {
+                // read the current CRC
                 let data = [
                     bus.mem_read(0x1e85),
                     bus.mem_read(0x1e86),
                     bus.mem_read(0x1e87),
                     bus.mem_read(0x1e88),
                 ];
-                print!("crc32 = ${:02x}{:02x}{:02x}{:02x}   ",
-                        data[0], data[1], data[2], data[3]);
-                print_cpu(&cpu, &mut bus);
-            }
-            // test loop
-            if cpu.sr.pc == 0x1b27 {
-                // loops = loops + 1;
-            }
-            // shifter fired
-            if cpu.sr.pc == 0xfcad {
-                let data = [
-                    // iut
-                    bus.mem_read(0x1d42),
-                    bus.mem_read(0x1d43),
-                    bus.mem_read(0x1d44),
-                    bus.mem_read(0x1d45),
-                    // msbt
-                    bus.mem_read(0x103),
-                    bus.mem_read(0x104),
-                    bus.mem_read(0x105),
-                    bus.mem_read(0x106),
-                    bus.mem_read(0x107),
-                    bus.mem_read(0x108),
-                    bus.mem_read(0x109),
-                    bus.mem_read(0x10a),
-                    bus.mem_read(0x10b),
-                    bus.mem_read(0x10c),
-                    bus.mem_read(0x10d),
-                    bus.mem_read(0x10e),
-                    bus.mem_read(0x10f),
-                    bus.mem_read(0x110),
-                    bus.mem_read(0x111),
-                    bus.mem_read(0x112),
-                ];
-                print!("#{:05}  ", loops);
-                print!(
-                    "uit=${:02x} ${:02x} ${:02x} ${:02x} ",
-                    data[0], data[1], data[2], data[3],
-                );
-                print!(
-                    "memop=${:02x}{:02x} iy=${:02x}{:02x} ix=${:02x}{:02x} hl=${:02x}{:02x} de=${:02x}{:02x} ",
-                    data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13]
-                );
-                print!(
-                    "bc=${:02x}{:02x} a=${:02x} f=${:02x} sp=${:02x}{:02x} ",
-                    data[14], data[15], data[16], data[17], data[18], data[19]
-                );
-                println!("   {}", crate::disasm::disasm(&data));
-                if data[10] == 0x39 && data[11] == 0xb3 {
-                    thread::sleep(time::Duration::from_secs(1));
-                }
+                println!("iteration {} crc = {:02x}{:02x}{:02x}{:02x}",
+                    loops, data[0], data[1], data[2], data[3]);
+                loops += 1;
             }
             if cpu.mode == crate::cpu::Mode::Halt {
                 print_cpu(&cpu, &mut bus);

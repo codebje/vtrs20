@@ -4,12 +4,12 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use proc_macro::TokenStream;
-use proc_macro2::{Literal, Punct, Spacing, Span};
+use proc_macro2::{Punct, Spacing, Span};
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, Expr, Ident, Lit, LitInt, Token};
+use syn::{parse_macro_input, Expr, Ident, Lit, LitInt, LitStr, Token};
 
 use zexrunner::*;
 
@@ -26,8 +26,8 @@ struct ZexTestCase {
     base_state: ZexState,
     increment: ZexState,
     shift: ZexState,
-    crc: LitInt,
-    msg: Literal,
+    crc: u32,
+    msg: LitStr,
 }
 
 // Skip comments until a condition is met
@@ -149,13 +149,17 @@ impl Parse for ZexTestCase {
         // expected crc
         skip_comment(input, |stream| stream.peek(kw::db))?;
         input.parse::<kw::db>()?;
-        let crc1: LitInt = input.parse()?;
+        let crc1 = input.parse::<LitInt>()?.base10_parse::<u8>()?;
         input.parse::<Token![,]>()?;
-        let _crc2: LitInt = input.parse()?;
+        let crc2 = input.parse::<LitInt>()?.base10_parse::<u8>()?;
         input.parse::<Token![,]>()?;
-        let _crc3: LitInt = input.parse()?;
+        let crc3 = input.parse::<LitInt>()?.base10_parse::<u8>()?;
         input.parse::<Token![,]>()?;
-        let _crc4: LitInt = input.parse()?;
+        let crc4 = input.parse::<LitInt>()?.base10_parse::<u8>()?;
+        let crc = ((crc1 as u32) << 24)
+                | ((crc2 as u32) << 16)
+                | ((crc3 as u32) << 8)
+                | (crc4 as u32);
 
         // Test description
         skip_comment(input, |stream| stream.peek(kw::tmsg))?;
@@ -168,7 +172,7 @@ impl Parse for ZexTestCase {
             base_state,
             increment,
             shift,
-            crc: crc1,
+            crc: crc,
             msg,
         })
     }
@@ -192,12 +196,13 @@ impl ToTokens for ZexTestCase {
         let base = &self.base_state;
         let increment = &self.increment;
         let shift = &self.shift;
+        let crc = &self.crc;
         tokens.append_all(quote! {
             let msg = #msg;
-            let mut state = #base;
+            let state = #base;
             let increment = #increment;
             let shift = #shift;
-            println!("{} {:?}", msg, state);
+            let crc = #crc;
         });
     }
 }
@@ -211,12 +216,7 @@ pub fn testcase(input: TokenStream) -> TokenStream {
         //#[test]
         fn #test_name() {
             #case
-            let crc = 0xffffffffu32;
-            loop {
-                zex_execute(&mut state, #flagmask);
-                // increment counter, if wrapped then increment shifter
-                break;
-            }
+            assert_eq!(zex_run_test(&state, &increment, &shift, #flagmask), crc, "{}", msg);
         }
     };
     result.into()

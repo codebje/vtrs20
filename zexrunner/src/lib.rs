@@ -2,12 +2,16 @@ use proc_macro2::{Literal, Punct, Spacing, Span};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::Ident;
 use std::rc::Rc;
+use std::ops::{Index, IndexMut};
+use std::slice;
+use std::mem;
 
 use emulator::cpu::{Register, CPU};
 use emulator::bus::{Bus, Peripheral};
 use emulator::ram::RAM;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[repr(C)]
 pub struct ZexState {
     pub instruction: u32,
     pub operand: u16,
@@ -19,6 +23,57 @@ pub struct ZexState {
     pub f: u8,
     pub a: u8,
     pub sp: u16,
+}
+
+// Treat a ZexState as an indexable byte array
+impl Index<usize> for ZexState {
+    type Output = u8;
+    
+    // This remaps the ZexState pointer as a byte pointer. Note that
+    // endianness is not considered.
+    fn index(&self, i: usize) -> &Self::Output {
+        let p: *const ZexState = self;
+        let p: *const u8 = p as *const u8;
+        let bytes: &[u8] = unsafe {
+            slice::from_raw_parts(p, mem::size_of::<ZexState>())
+        };
+        &bytes[i]
+    }
+}
+
+impl IndexMut<usize> for ZexState {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+        let p: *mut ZexState = self;
+        let p: *mut u8 = p as *mut u8;
+        let bytes: &mut [u8] = unsafe {
+            slice::from_raw_parts_mut(p, mem::size_of::<ZexState>())
+        };
+        &mut bytes[i]
+    }    
+}
+
+#[test]
+fn test_index_mut() {
+    let mut z = ZexState {
+        instruction: 0,
+        operand: 0,
+        iy: 0,
+        ix: 0,
+        hl: 0,
+        de: 0,
+        bc: 0,
+        f: 0,
+        a: 21,
+        sp: 0,
+    };
+
+    // Because ZexState has a repr(C), but is not packed, some platforms
+    // may introduce alignment padding. This test will always succeed on
+    // x86 but may fail on other platforms.
+    z[16] = 42;
+    assert_eq!(z.f, 42);
+    assert_eq!(z[17], 21);
+    assert_eq!(mem::size_of::<ZexState>(), 20);
 }
 
 #[allow(dead_code)]
@@ -51,6 +106,156 @@ impl ToTokens for ZexState {
             };
         });
     }
+}
+
+fn count_bits(state: &ZexState) -> u32 {
+    state.instruction.count_ones()
+        + state.operand.count_ones() as u32
+        + state.iy.count_ones() as u32
+        + state.ix.count_ones() as u32
+        + state.hl.count_ones() as u32
+        + state.de.count_ones() as u32
+        + state.bc.count_ones() as u32
+        + state.f.count_ones() as u32
+        + state.a.count_ones() as u32
+        + state.sp.count_ones() as u32
+}
+
+/*
+; 0xb339    45881   0b1011_0011_0011_1001 
+; 0xb338    45880   0b1011_0011_0011_1000 
+; 0xf821    63521   0b1111_1000_0010_0001 
+
+854 c=0x42 0b0100_0010  a=0x38 0b0011_1000  counter=01 00 00 00 00 ...
+855                     a=     0b0001_1100  cf=0
+859 c=     0b0100_0010  a=     0b0100_0010
+860                     a=     0b0010_0001  cf=0
+861 c=     0b0010_0001
+862                     a=     0b0001_1100
+864 b=7, loop to 855
+855                     a=     0b0000_1110 cf=0
+859                     a=     0b0010_0001
+860                     a=     0b1001_0000 cf=1
+861 c=     0b1001_0000
+862                     a=     0b0000_1110
+864 b=6, loop to 855
+855                     a=     0b0000_0111 cf=0
+858                     a=     0b0000_0000
+859                     a=     0b1001_0000
+860                     a=     0b0100_1000 cf=0
+861 c=     0b0100_1000
+862                     a=     0b0000_0111
+864 b=5, loop to 855
+855                     a=     0b1000_0011 cf=1
+858                     a=     0b0000_0001
+859                     a=     0b0100_1001
+860                     a=     0b1010_0100 cf=1
+861 c=     0b1010_0100
+862                     a=     0b1000_0011
+864 b=4, loop to 855 (a always zero at 859 from here on in)
+855                     a=     0b1100_0001 cf=1
+859                     a=     0b1010_0100
+860                     a=     0b0101_0010 cf=0
+862 c=0b0101_0010       a=     0b1100_0001
+864 b=3, loop to 855
+855                     a=     0b1110_0000 cf=1
+859                     a=     0b0101_0010
+862 c=     0b0010_1001  a=     0b1110_0000
+864 b=2, loop to 855
+855                     a=     0b0111_0000 cf=0
+862 c=     0b1001_0100
+864 b=1, loop to 855
+855                     a=     0b0011_1000 cf=0
+862 c=     0b0100_1010
+864 b=0, done
+888 output byte went from 0x42 to 0x4a - lowest bit of mask is set
+
+854 c=0x42 0b0100_0010  a=0x38 0b0011_1000  counter=01 00 00 00 00 ...
+
+871 c=0b0011_1001 a=0b1111_1111
+-- loop, b=8
+872 rrca        c=0b0011_1001 a=0b1111_1111 C
+873 push af     c=0b0011_1001 a=0b1111_1111 C
+874 ld   a,0    c=0b0011_1001 a=0b0000_0000 C
+875 call...     c=0b0011_1001 a=0b0000_0001 Z
+876 xor  c      c=0b0011_1001 a=0b0011_1000
+877 rrca        c=0b0011_1001 a=0b0001_1100
+878 ld   c,a    c=0b0001_1100 a=0b0001_1100
+879 pop af      c=0b0001_1100 a=0b1111_1111
+880 dec b
+881 jp nz,..
+-- loop, b=7 (873, 874, 875 always result in a=0)
+872 rrca        c=0b0001_1100 a=0b1111_1111 C
+876 xor  c      c=0b0001_1100 a=0b0001_1100
+877 rrca        c=0b0001_1100 a=0b0000_1110
+878 ld   c,a    c=0b0000_1110 a=0b0000_1110
+879 pop af      c=0b0000_1110 a=0b1111_1111
+-- loop, b=6
+876 xor  c      c=0b0000_1110 a=0b0000_1110
+878 ld   c,a    c=0b0000_0111
+-- loop b=5
+876 xor  c      a=0b0000_0111
+878 ld   c,a    c=0b1000_0011
+-- loop b=4
+878 ld   c,a    c=0b1100_0001
+-- loop b=3
+878 ld   c,a    c=0b1110_0000
+-- loop b=2
+878 ld   c,a    c=0b0111_0000
+-- loop b=1
+878 ld   c,a    c=0b0011_1000
+
+
+
+*/
+
+fn flip_state(state: &mut ZexState, mask: &ZexState, count: &num::BigUint) {
+
+    let mut v = count.clone();
+
+    for i in 0..20 {
+        for b in 0..8 {
+            if mask[i] & (1 << b) != 0 {
+                match v.trailing_zeros() {
+                    Some(0) => state[i] ^= 1 << b,
+                    _ => (),
+                }
+                v >>= 1;
+            }
+        }
+    }
+
+}
+
+pub fn zex_run_test(init: &ZexState, incr: &ZexState, flip: &ZexState, mask: u8) -> u32 {
+
+    // work out flip and increment loop sizes
+    let incr_bits = count_bits(&incr);
+    let flip_bits = count_bits(&flip);
+    let flip_count = num::BigUint::from(2u8).pow(flip_bits);
+    let incr_count = num::BigUint::from(2u8).pow(incr_bits);
+
+    let mut shifter = num::BigUint::from(1u8);
+    let mut first_test = true;  // the very first test does not get set up: this is a bug in zexdoc
+    let mut crc = 0xffffffff;
+    while shifter <= flip_count {
+        let mut counter = num::BigUint::from(0u8);
+        while counter < incr_count {
+            let mut test_state = init.clone();
+            if !first_test {
+                flip_state(&mut test_state, &incr, &counter);
+                flip_state(&mut test_state, &flip, &shifter);
+            } else {
+                first_test = false;
+            }
+            crc = zex_execute(&test_state, mask, crc);
+            // return crc;
+            counter = counter + 1u8;
+        }
+        shifter <<= 1;
+    }
+    
+    crc
 }
 
 // Execute one instruction with a specific CPU state, returning an updated CRC
@@ -103,8 +308,8 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
 
     // Update the CRC
     let mut result = crc;
-    result = updcrc(result, ram.mem_read(0x103).unwrap_or(0));
     result = updcrc(result, ram.mem_read(0x104).unwrap_or(0));
+    result = updcrc(result, ram.mem_read(0x103).unwrap_or(0));
     result = updcrc(result, (cpu.reg(Register::IY) >> 0) as u8);
     result = updcrc(result, (cpu.reg(Register::IY) >> 8) as u8);
     result = updcrc(result, (cpu.reg(Register::IX) >> 0) as u8);
@@ -119,6 +324,9 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
     result = updcrc(result, cpu.reg(Register::A) as u8);
     result = updcrc(result, (cpu.reg(Register::SP) >> 0) as u8);
     result = updcrc(result, (cpu.reg(Register::SP) >> 8) as u8);
+
+    // println!("Test state: instr={:08x} hl={:04x}->{:04x} f={:08b} crc={:08x}",
+    //     state.instruction, state.hl, cpu.reg(Register::HL), cpu.reg(Register::F), result);
 
     result
 }
@@ -139,19 +347,8 @@ fn exec_tests() {
         sp: 0x465e,
     };
 
-    assert_eq!(zex_execute(&state, 0xff, 0xffffffff), 0xd3b0fb71, "CRC is correct");
+    assert_eq!(zex_execute(&state, 0xff, 0xffffffff), 0x96e7a894, "CRC is correct");
 }
-
-//pub fn add_counter(state: &ZexState
-//
-// initmask:
-//   clear working area to zero
-//      20-byte counter
-//      20-byte target value
-//   popcnt() the mask
-//   hl = popcnt()/8
-//   (hl) = 1 << popcnt() & 0x7
-//
 
 fn updcrc(crcval: u32, byte: u8) -> u32 {
     let idx = (crcval as u8 ^ byte) as usize;

@@ -9,7 +9,7 @@ use crate::cpu::CPU;
 
 impl CPU {
     pub(super) fn add_hl_ww(&mut self, ww: RegW, with_carry: bool) {
-        let carry = if with_carry { self.gr.f & 1 } else { 0 };
+        let carry = if with_carry { self.gr.f & Flags::CF.bits() } else { 0 };
         let value = self.reg(ww) as u32;
         let hl = self.gr.hl as u32;
         let result = hl + value + carry as u32;
@@ -30,14 +30,21 @@ impl CPU {
     }
 
     pub(super) fn sub_hl_ww(&mut self, ww: RegW, borrow: bool) {
-        let carry = if borrow { self.gr.f & 1 } else { 0 };
+        let carry = if borrow { self.gr.f & Flags::CF.bits() } else { 0 };
         let operand = self.reg(ww) as i32;
         let result = self.gr.hl as i32 - operand - carry as i32;
 
+        // sign flag set if bit 16 set
+        // zero flag set if result is zero
+        // overflow flag set if pos+pos=neg or neg+neg=pos
+        // negative flag always set
+        // carry flag set if result is negative
+        let signs = (self.gr.hl ^ operand as u16 ^ 0b1000_0000_0000_0000) & (self.gr.hl ^ result as u16);
         self.gr.f = (result & 0b1000_0000_0000_0000 >> 8) as u8
             | (if (result & 0xffff) == 0 { 0b0100_0000 } else { 0 }) as u8
-            | (((self.gr.hl ^ operand as u16 ^ result as u16) & (self.gr.hl ^ result as u16)) >> 13) as u8
-            | (result as u32 >> 16 & 1) as u8;
+            | ((signs >> 13) & 0b0000_0100) as u8
+            | Flags::NF.bits()
+            | if result < 0 { Flags::CF.bits() } else { 0 };
         self.gr.hl = result as u16;
     }
 }
