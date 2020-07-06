@@ -101,6 +101,8 @@ impl From<RegIndex> for Register {
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub(super) enum Operand {
+    Absolute(u8),
+    Memory(u16),
     Direct(Register),
     Indirect(RegIndirect),
     Indexed(RegIndex),

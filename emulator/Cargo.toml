@@ -11,3 +11,4 @@ bitflags = "1.2.1"
 
 [dev-dependencies]
 zexrunner = { path = "../zexrunner" }
+zextest = { path = "../zextest" }

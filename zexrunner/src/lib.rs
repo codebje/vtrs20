@@ -1,14 +1,16 @@
 use proc_macro2::{Literal, Punct, Spacing, Span};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::Ident;
 use std::rc::Rc;
-use std::ops::{Index, IndexMut};
-use std::slice;
-use std::mem;
+use syn::Ident;
 
-use emulator::cpu::{Register, CPU};
 use emulator::bus::{Bus, Peripheral};
+use emulator::cpu::{Register, CPU};
 use emulator::ram::RAM;
+
+use z80emu;
+use z80emu::Cpu;
+
+const TEST_DEBUG: bool = false;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[repr(C)]
@@ -25,58 +27,60 @@ pub struct ZexState {
     pub sp: u16,
 }
 
-// Treat a ZexState as an indexable byte array
-impl Index<usize> for ZexState {
-    type Output = u8;
-    
-    // This remaps the ZexState pointer as a byte pointer. Note that
-    // endianness is not considered.
-    fn index(&self, i: usize) -> &Self::Output {
-        let p: *const ZexState = self;
-        let p: *const u8 = p as *const u8;
-        let bytes: &[u8] = unsafe {
-            slice::from_raw_parts(p, mem::size_of::<ZexState>())
-        };
-        &bytes[i]
+impl ZexState {
+    fn get(&self, i: usize) -> u8 {
+        match i {
+            0 => (self.instruction >> 24) as u8,
+            1 => (self.instruction >> 16) as u8,
+            2 => (self.instruction >> 8) as u8,
+            3 => (self.instruction >> 0) as u8,
+            4 => (self.operand >> 0) as u8,
+            5 => (self.operand >> 8) as u8,
+            6 => (self.iy >> 0) as u8,
+            7 => (self.iy >> 8) as u8,
+            8 => (self.ix >> 0) as u8,
+            9 => (self.ix >> 8) as u8,
+            10 => (self.hl >> 0) as u8,
+            11 => (self.hl >> 8) as u8,
+            12 => (self.de >> 0) as u8,
+            13 => (self.de >> 8) as u8,
+            14 => (self.bc >> 0) as u8,
+            15 => (self.bc >> 8) as u8,
+            16 => (self.f >> 0) as u8,
+            17 => (self.a >> 0) as u8,
+            18 => (self.sp >> 0) as u8,
+            19 => (self.sp >> 8) as u8,
+            _ => 0,
+        }
+    }
+
+    fn set(&mut self, i: usize, v: u8) {
+        match i {
+            0 => self.instruction = (self.instruction & 0x00ffffff) | ((v as u32) << 24),
+            1 => self.instruction = (self.instruction & 0xff00ffff) | ((v as u32) << 16),
+            2 => self.instruction = (self.instruction & 0xffff00ff) | ((v as u32) << 8),
+            3 => self.instruction = (self.instruction & 0xffffff00) | ((v as u32) << 0),
+            4 => self.operand = (self.operand & 0xff00) | ((v as u16) << 0),
+            5 => self.operand = (self.operand & 0x00ff) | ((v as u16) << 8),
+            6 => self.iy = (self.iy & 0xff00) | ((v as u16) << 0),
+            7 => self.iy = (self.iy & 0x00ff) | ((v as u16) << 8),
+            8 => self.ix = (self.ix & 0xff00) | ((v as u16) << 0),
+            9 => self.ix = (self.ix & 0x00ff) | ((v as u16) << 8),
+            10 => self.hl = (self.hl & 0xff00) | ((v as u16) << 0),
+            11 => self.hl = (self.hl & 0x00ff) | ((v as u16) << 8),
+            12 => self.de = (self.de & 0xff00) | ((v as u16) << 0),
+            13 => self.de = (self.de & 0x00ff) | ((v as u16) << 8),
+            14 => self.bc = (self.bc & 0xff00) | ((v as u16) << 0),
+            15 => self.bc = (self.bc & 0x00ff) | ((v as u16) << 8),
+            16 => self.f = v,
+            17 => self.a = v,
+            18 => self.sp = (self.sp & 0xff00) | ((v as u16) << 0),
+            19 => self.sp = (self.sp & 0x00ff) | ((v as u16) << 8),
+            _ => (),
+        }
     }
 }
 
-impl IndexMut<usize> for ZexState {
-    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
-        let p: *mut ZexState = self;
-        let p: *mut u8 = p as *mut u8;
-        let bytes: &mut [u8] = unsafe {
-            slice::from_raw_parts_mut(p, mem::size_of::<ZexState>())
-        };
-        &mut bytes[i]
-    }    
-}
-
-#[test]
-fn test_index_mut() {
-    let mut z = ZexState {
-        instruction: 0,
-        operand: 0,
-        iy: 0,
-        ix: 0,
-        hl: 0,
-        de: 0,
-        bc: 0,
-        f: 0,
-        a: 21,
-        sp: 0,
-    };
-
-    // Because ZexState has a repr(C), but is not packed, some platforms
-    // may introduce alignment padding. This test will always succeed on
-    // x86 but may fail on other platforms.
-    z[16] = 42;
-    assert_eq!(z.f, 42);
-    assert_eq!(z[17], 21);
-    assert_eq!(mem::size_of::<ZexState>(), 20);
-}
-
-#[allow(dead_code)]
 fn field_ref<U>(tokens: &mut proc_macro2::TokenStream, name: &str, value: U)
 where
     U: Into<proc_macro2::TokenTree>,
@@ -108,6 +112,49 @@ impl ToTokens for ZexState {
     }
 }
 
+#[test]
+fn test_zex_state() {
+    let mut state = ZexState {
+        instruction: 0xdd_66_01_00,
+        operand: 0x84e0,
+        iy: 0x102,
+        ix: 0x102,
+        hl: 0x9c52,
+        de: 0xa799,
+        bc: 0x49b6,
+        f: 0x93,
+        a: 0x00,
+        sp: 0xeead,
+    };
+    // 02 01 02 01 52 9c 99 a7 b6 49 93 00 ad ee
+
+    assert_eq!(state.get(0), 0xdd, "instruction.0 access is correct");
+    assert_eq!(state.get(1), 0x66, "instruction.1 access is correct");
+    assert_eq!(state.get(2), 0x01, "instruction.2 access is correct");
+    assert_eq!(state.get(3), 0x00, "instruction.3 access is correct");
+    assert_eq!(state.get(4), 0xe0, "operand.0 access is correct");
+    assert_eq!(state.get(5), 0x84, "operand.0 access is correct");
+    assert_eq!(state.get(6), 0x02, "iy.0 access is correct");
+    assert_eq!(state.get(7), 0x01, "iy.1 access is correct");
+    assert_eq!(state.get(8), 0x02, "ix.0 access is correct");
+    assert_eq!(state.get(9), 0x01, "ix.1 access is correct");
+    assert_eq!(state.get(10), 0x52, "hl.0 access is correct");
+    assert_eq!(state.get(11), 0x9c, "hl.1 access is correct");
+    assert_eq!(state.get(12), 0x99, "de.0 access is correct");
+    assert_eq!(state.get(13), 0xa7, "de.1 access is correct");
+    assert_eq!(state.get(14), 0xb6, "bc.0 access is correct");
+    assert_eq!(state.get(15), 0x49, "bc.1 access is correct");
+    assert_eq!(state.get(16), 0x93, "f access is correct");
+    assert_eq!(state.get(17), 0x00, "a access is correct");
+    assert_eq!(state.get(18), 0xad, "sp.0 access is correct");
+    assert_eq!(state.get(19), 0xee, "sp.1 access is correct");
+
+    state.set(5, state.get(5) ^ (1 << 0));
+    assert_eq!(state.operand, 0x85e0, "operand is good");
+    state.set(4, state.get(4) ^ (1 << 3));
+    assert_eq!(state.operand, 0x85e8, "operand low byte good");
+}
+
 fn count_bits(state: &ZexState) -> u32 {
     state.instruction.count_ones()
         + state.operand.count_ones() as u32
@@ -121,114 +168,83 @@ fn count_bits(state: &ZexState) -> u32 {
         + state.sp.count_ones() as u32
 }
 
-/*
-; 0xb339    45881   0b1011_0011_0011_1001 
-; 0xb338    45880   0b1011_0011_0011_1000 
-; 0xf821    63521   0b1111_1000_0010_0001 
-
-854 c=0x42 0b0100_0010  a=0x38 0b0011_1000  counter=01 00 00 00 00 ...
-855                     a=     0b0001_1100  cf=0
-859 c=     0b0100_0010  a=     0b0100_0010
-860                     a=     0b0010_0001  cf=0
-861 c=     0b0010_0001
-862                     a=     0b0001_1100
-864 b=7, loop to 855
-855                     a=     0b0000_1110 cf=0
-859                     a=     0b0010_0001
-860                     a=     0b1001_0000 cf=1
-861 c=     0b1001_0000
-862                     a=     0b0000_1110
-864 b=6, loop to 855
-855                     a=     0b0000_0111 cf=0
-858                     a=     0b0000_0000
-859                     a=     0b1001_0000
-860                     a=     0b0100_1000 cf=0
-861 c=     0b0100_1000
-862                     a=     0b0000_0111
-864 b=5, loop to 855
-855                     a=     0b1000_0011 cf=1
-858                     a=     0b0000_0001
-859                     a=     0b0100_1001
-860                     a=     0b1010_0100 cf=1
-861 c=     0b1010_0100
-862                     a=     0b1000_0011
-864 b=4, loop to 855 (a always zero at 859 from here on in)
-855                     a=     0b1100_0001 cf=1
-859                     a=     0b1010_0100
-860                     a=     0b0101_0010 cf=0
-862 c=0b0101_0010       a=     0b1100_0001
-864 b=3, loop to 855
-855                     a=     0b1110_0000 cf=1
-859                     a=     0b0101_0010
-862 c=     0b0010_1001  a=     0b1110_0000
-864 b=2, loop to 855
-855                     a=     0b0111_0000 cf=0
-862 c=     0b1001_0100
-864 b=1, loop to 855
-855                     a=     0b0011_1000 cf=0
-862 c=     0b0100_1010
-864 b=0, done
-888 output byte went from 0x42 to 0x4a - lowest bit of mask is set
-
-854 c=0x42 0b0100_0010  a=0x38 0b0011_1000  counter=01 00 00 00 00 ...
-
-871 c=0b0011_1001 a=0b1111_1111
--- loop, b=8
-872 rrca        c=0b0011_1001 a=0b1111_1111 C
-873 push af     c=0b0011_1001 a=0b1111_1111 C
-874 ld   a,0    c=0b0011_1001 a=0b0000_0000 C
-875 call...     c=0b0011_1001 a=0b0000_0001 Z
-876 xor  c      c=0b0011_1001 a=0b0011_1000
-877 rrca        c=0b0011_1001 a=0b0001_1100
-878 ld   c,a    c=0b0001_1100 a=0b0001_1100
-879 pop af      c=0b0001_1100 a=0b1111_1111
-880 dec b
-881 jp nz,..
--- loop, b=7 (873, 874, 875 always result in a=0)
-872 rrca        c=0b0001_1100 a=0b1111_1111 C
-876 xor  c      c=0b0001_1100 a=0b0001_1100
-877 rrca        c=0b0001_1100 a=0b0000_1110
-878 ld   c,a    c=0b0000_1110 a=0b0000_1110
-879 pop af      c=0b0000_1110 a=0b1111_1111
--- loop, b=6
-876 xor  c      c=0b0000_1110 a=0b0000_1110
-878 ld   c,a    c=0b0000_0111
--- loop b=5
-876 xor  c      a=0b0000_0111
-878 ld   c,a    c=0b1000_0011
--- loop b=4
-878 ld   c,a    c=0b1100_0001
--- loop b=3
-878 ld   c,a    c=0b1110_0000
--- loop b=2
-878 ld   c,a    c=0b0111_0000
--- loop b=1
-878 ld   c,a    c=0b0011_1000
-
-
-
-*/
-
 fn flip_state(state: &mut ZexState, mask: &ZexState, count: &num::BigUint) {
-
     let mut v = count.clone();
 
     for i in 0..20 {
         for b in 0..8 {
-            if mask[i] & (1 << b) != 0 {
+            if mask.get(i) & (1 << b) != 0 {
                 match v.trailing_zeros() {
-                    Some(0) => state[i] ^= 1 << b,
+                    Some(0) => state.set(i, state.get(i) ^ (1 << b)),
                     _ => (),
                 }
                 v >>= 1;
             }
         }
     }
+}
 
+#[test]
+fn test_flip_state() {
+    // tstr	0xdd,0x66,1,0,0x84e0,msbt-1,msbt-1,0x9c52,0xa799,0x49b6,0x93,0x00,0xeead
+    // tstr	0x20,0x08,0,0,0,1,1,0,0,0,0,0,0		; (16 cycles)
+    // tstr	0,0,0,0,-1,0,0,0,0,0,0,0,0		    ; (16 cycles)
+
+    let mut state = ZexState {
+        instruction: 0xdd_66_01_00,
+        operand: 0x84e0,
+        iy: 0x102,
+        ix: 0x102,
+        hl: 0x9c52,
+        de: 0xa799,
+        bc: 0x49b6,
+        f: 0x93,
+        a: 0x00,
+        sp: 0xeead,
+    };
+    let mask = ZexState {
+        instruction: 0x20_08_00_00,
+        operand: 0,
+        iy: 1,
+        ix: 1,
+        hl: 0,
+        de: 0,
+        bc: 0,
+        f: 0,
+        a: 0,
+        sp: 0,
+    };
+    let shift = ZexState {
+        instruction: 0,
+        operand: 0xffff,
+        iy: 0,
+        ix: 0,
+        hl: 0,
+        de: 0,
+        bc: 0,
+        f: 0,
+        a: 0,
+        sp: 0,
+    };
+
+    flip_state(&mut state, &mask, &num::BigUint::from(1u8));
+
+    assert_eq!(state.instruction, 0xfd_66_01_00, "flip bit 6 of byte 1 first");
+
+    flip_state(&mut state, &mask, &num::BigUint::from(2u8));
+
+    assert_eq!(state.instruction, 0xfd_6e_01_00, "flip bit 3 of byte 2 next");
+
+    let operands: [u16; 8] = [0x84e1, 0x84e2, 0x84e4, 0x84e8, 0x84f0, 0x84c0, 0x84a0, 0x8460];
+    for b in 0..8 {
+        let bit = num::BigUint::from(1u8) << b;
+        state.operand = 0x84e0;
+        flip_state(&mut state, &shift, &bit);
+        assert_eq!(state.operand, operands[b], "shifted safely");
+    }
 }
 
 pub fn zex_run_test(init: &ZexState, incr: &ZexState, flip: &ZexState, mask: u8) -> u32 {
-
     // work out flip and increment loop sizes
     let incr_bits = count_bits(&incr);
     let flip_bits = count_bits(&flip);
@@ -236,7 +252,7 @@ pub fn zex_run_test(init: &ZexState, incr: &ZexState, flip: &ZexState, mask: u8)
     let incr_count = num::BigUint::from(2u8).pow(incr_bits);
 
     let mut shifter = num::BigUint::from(1u8);
-    let mut first_test = true;  // the very first test does not get set up: this is a bug in zexdoc
+    let mut first_test = true; // the very first test does not get set up: this is a bug in zexdoc
     let mut crc = 0xffffffff;
     while shifter <= flip_count {
         let mut counter = num::BigUint::from(0u8);
@@ -249,17 +265,62 @@ pub fn zex_run_test(init: &ZexState, incr: &ZexState, flip: &ZexState, mask: u8)
                 first_test = false;
             }
             crc = zex_execute(&test_state, mask, crc);
-            // return crc;
             counter = counter + 1u8;
         }
         shifter <<= 1;
     }
-    
     crc
+}
+
+struct TestBus {
+    mem: [u8; 65536],
+}
+
+impl z80emu::Io for TestBus {
+    type Timestamp = i32;
+    type WrIoBreak = ();
+    type RetiBreak = ();
+}
+
+impl z80emu::Memory for TestBus {
+    type Timestamp = i32;
+    fn read_debug(&self, addr: u16) -> u8 {
+        self.mem[addr as usize]
+    }
+}
+
+struct DebugFlags {
+    pub flags: u8,
+}
+
+impl DebugFlags {
+    pub fn new(flags: u8) -> DebugFlags {
+        DebugFlags { flags }
+    }
+}
+
+impl std::fmt::Display for DebugFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}-{}-{}{}{}",
+            if (self.flags & 0b1000_0000) != 0 { 'S' } else { 's' },
+            if (self.flags & 0b0100_0000) != 0 { 'Z' } else { 'z' },
+            if (self.flags & 0b0001_0000) != 0 { 'H' } else { 'h' },
+            if (self.flags & 0b0000_0100) != 0 { 'V' } else { 'v' },
+            if (self.flags & 0b0000_0010) != 0 { 'N' } else { 'n' },
+            if (self.flags & 0b0000_0001) != 0 { 'C' } else { 'c' }
+        )
+    }
 }
 
 // Execute one instruction with a specific CPU state, returning an updated CRC
 pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
+    // just skip if it's a HALT
+    if state.instruction & 0xff000000 == 0x76000000 || state.instruction & 0xdfff0000 == 0xdd760000 {
+        return crc;
+    }
+
     let mut bus = Bus::new();
     let mut cpu = CPU::new(&mut bus);
     let ram = Rc::new(RAM::new(0x0000, 0x10000));
@@ -268,27 +329,27 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
     ram.write(
         0x103,
         &[
-            (state.operand >> 8) as u8,
             state.operand as u8,
-            (state.iy >> 8) as u8,
+            (state.operand >> 8) as u8,
             state.iy as u8,
-            (state.ix >> 8) as u8,
+            (state.iy >> 8) as u8,
             state.ix as u8,
-            (state.hl >> 8) as u8,
+            (state.ix >> 8) as u8,
             state.hl as u8,
-            (state.de >> 8) as u8,
+            (state.hl >> 8) as u8,
             state.de as u8,
-            (state.bc >> 8) as u8,
+            (state.de >> 8) as u8,
             state.bc as u8,
+            (state.bc >> 8) as u8,
             state.a,
             state.f,
-            (state.sp >> 8) as u8,
             state.sp as u8,
+            (state.sp >> 8) as u8,
             (state.instruction >> 24) as u8,
             (state.instruction >> 16) as u8,
             (state.instruction >> 8) as u8,
             (state.instruction >> 0) as u8,
-        ]
+        ],
     );
 
     // Set up the CPU
@@ -303,13 +364,45 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
     cpu.write_reg(Register::IY, state.iy);
     cpu.write_reg(Register::PC, 0x113);
 
-    // Run one instruction
-    cpu.cycle(&mut bus);
+    if TEST_DEBUG {
+        println!(
+            "## execute: {:02x} {:02x} {:02x} {:02x}      {}",
+            (state.instruction >> 24) as u8,
+            (state.instruction >> 16) as u8,
+            (state.instruction >> 8) as u8,
+            (state.instruction >> 0) as u8,
+            emulator::disasm::disasm(&[
+                (state.instruction >> 24) as u8,
+                (state.instruction >> 16) as u8,
+                (state.instruction >> 8) as u8,
+                (state.instruction >> 0) as u8,
+            ]),
+        );
+        println!("          PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}  (PC)={:08X}  crc={:08x}",
+        cpu.reg(Register::PC),
+        cpu.reg(Register::SP),
+        cpu.reg(Register::A),
+        cpu.reg(Register::BC),
+        cpu.reg(Register::DE),
+        cpu.reg(Register::HL),
+        cpu.reg(Register::IX),
+        cpu.reg(Register::IY),
+        DebugFlags::new(cpu.reg(Register::F) as u8),
+        ram.mem_read(0x103).unwrap_or(0),
+        ram.mem_read(0x104).unwrap_or(0),
+        state.instruction,
+        crc);
+    }
+
+    // Allow instructions like LDI to loop by resetting PC
+    while cpu.reg(Register::PC) == 0x113 {
+        cpu.cycle(&mut bus);
+    }
 
     // Update the CRC
     let mut result = crc;
-    result = updcrc(result, ram.mem_read(0x104).unwrap_or(0));
     result = updcrc(result, ram.mem_read(0x103).unwrap_or(0));
+    result = updcrc(result, ram.mem_read(0x104).unwrap_or(0));
     result = updcrc(result, (cpu.reg(Register::IY) >> 0) as u8);
     result = updcrc(result, (cpu.reg(Register::IY) >> 8) as u8);
     result = updcrc(result, (cpu.reg(Register::IX) >> 0) as u8);
@@ -325,8 +418,90 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
     result = updcrc(result, (cpu.reg(Register::SP) >> 0) as u8);
     result = updcrc(result, (cpu.reg(Register::SP) >> 8) as u8);
 
-    // println!("Test state: instr={:08x} hl={:04x}->{:04x} f={:08b} crc={:08x}",
-    //     state.instruction, state.hl, cpu.reg(Register::HL), cpu.reg(Register::F), result);
+    if TEST_DEBUG {
+        let mut cpu80 = z80emu::Z80CMOS::default();
+        let mut bus80 = TestBus { mem: [0; 65536] };
+        let mut clk80 = z80emu::host::TsCounter::<i32>::default();
+        cpu80.reset();
+        cpu80.set_sp(state.sp);
+        cpu80.set_acc(state.a);
+        cpu80.set_flags(z80emu::CpuFlags::from_bits_truncate(state.f));
+        cpu80.set_reg16(z80emu::StkReg16::BC, state.bc);
+        cpu80.set_reg16(z80emu::StkReg16::DE, state.de);
+        cpu80.set_reg16(z80emu::StkReg16::HL, state.hl);
+        cpu80.set_index16(z80emu::Prefix::Xdd, state.ix);
+        cpu80.set_index16(z80emu::Prefix::Yfd, state.iy);
+        cpu80.set_pc(0x113);
+        bus80.mem[0x103] = state.operand as u8;
+        bus80.mem[0x104] = (state.operand >> 8) as u8;
+        bus80.mem[0x105] = state.iy as u8;
+        bus80.mem[0x106] = (state.iy >> 8) as u8;
+        bus80.mem[0x107] = state.ix as u8;
+        bus80.mem[0x108] = (state.ix >> 8) as u8;
+        bus80.mem[0x109] = state.hl as u8;
+        bus80.mem[0x10a] = (state.hl >> 8) as u8;
+        bus80.mem[0x10b] = state.de as u8;
+        bus80.mem[0x10c] = (state.de >> 8) as u8;
+        bus80.mem[0x10d] = state.bc as u8;
+        bus80.mem[0x10e] = (state.bc >> 8) as u8;
+        bus80.mem[0x10f] = state.a;
+        bus80.mem[0x110] = state.f;
+        bus80.mem[0x111] = state.sp as u8;
+        bus80.mem[0x112] = (state.sp >> 8) as u8;
+        bus80.mem[0x113] = (state.instruction >> 24) as u8;
+        bus80.mem[0x114] = (state.instruction >> 16) as u8;
+        bus80.mem[0x115] = (state.instruction >> 8) as u8;
+        bus80.mem[0x116] = (state.instruction >> 0) as u8;
+
+        loop {
+            match cpu80.execute_next(&mut bus80, &mut clk80, Option::<z80emu::CpuDebugFn>::None) {
+                Err(_) => break,
+                Ok(_) => (),
+            }
+            if cpu80.get_pc() >= 0x117 {
+                break;
+            }
+        }
+
+        println!("_PC=0113  PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}  (PC)={:08X}  crc={:08x}",
+            cpu.reg(Register::PC),
+            cpu.reg(Register::SP),
+            cpu.reg(Register::A),
+            cpu.reg(Register::BC),
+            cpu.reg(Register::DE),
+            cpu.reg(Register::HL),
+            cpu.reg(Register::IX),
+            cpu.reg(Register::IY),
+            DebugFlags::new(cpu.reg(Register::F) as u8),
+            ram.mem_read(0x103).unwrap_or(0),
+            ram.mem_read(0x104).unwrap_or(0),
+            state.instruction,
+            result);
+        if (cpu80.get_flags().bits() & mask) != cpu.reg(Register::F) as u8
+            || cpu80.get_acc() != cpu.reg(Register::A) as u8
+            || cpu80.get_reg16(z80emu::StkReg16::BC) != cpu.reg(Register::BC)
+            || cpu80.get_reg16(z80emu::StkReg16::DE) != cpu.reg(Register::DE)
+            || cpu80.get_reg16(z80emu::StkReg16::HL) != cpu.reg(Register::HL)
+            || cpu80.get_index16(z80emu::Prefix::Xdd) != cpu.reg(Register::IX)
+            || cpu80.get_index16(z80emu::Prefix::Yfd) != cpu.reg(Register::IY)
+            || cpu80.get_sp() != cpu.reg(Register::SP)
+            || bus80.mem[0x103] != ram.mem_read(0x103).unwrap_or(0)
+            || bus80.mem[0x104] != ram.mem_read(0x104).unwrap_or(0)
+        {
+            println!("          PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}",
+                cpu80.get_pc(),
+                cpu80.get_sp(),
+                cpu80.get_acc(),
+                cpu80.get_reg16(z80emu::StkReg16::BC),
+                cpu80.get_reg16(z80emu::StkReg16::DE),
+                cpu80.get_reg16(z80emu::StkReg16::HL),
+                cpu80.get_index16(z80emu::Prefix::Xdd),
+                cpu80.get_index16(z80emu::Prefix::Yfd),
+                DebugFlags::new(cpu80.get_flags().bits()),
+                bus80.mem[0x103],
+                bus80.mem[0x104]);
+        }
+    }
 
     result
 }

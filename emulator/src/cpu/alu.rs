@@ -20,11 +20,12 @@ impl CPU {
     // adding two positive numbers or two negative numbers (ie, bit 7 is equal in src and add)
     // and the result is a different sign.
     fn add_flags(src: u16, add: u16, result: u16) -> u8 {
+        let carries = (src ^ add ^ result) & 0b1_0001_0000;
         let flags = (result & 0b1000_0000)                  // sign equals bit 7 of result
             | (if (result & 0xff) == 0 { 0b0100_0000 } else { 0 }) // zero
-            | ((src ^ add ^ result) & 0b0001_0000)  // half-carry set if bit carried into result bit 5
             | ((((src ^ add ^ 0b1000_0000) & (src ^ result)) >> 5) & 0b0000_0100) // overflow
-            | (if result > 0xff { 0b0000_0001} else { 0 });
+            | carries   // half-carry bit is in the right spot already
+            | (carries >> 8);
         flags as u8
     }
 
@@ -38,27 +39,32 @@ impl CPU {
         flags as u8
     }
 
-    // Adds "src" to A, storing the result in A.
-    pub(super) fn add_a(&mut self, bus: &mut Bus, src: Operand, with_carry: bool) {
-        let carry = if with_carry { self.gr.f as u16 & 1 } else { 0 };
-        let operand = self.load_operand(bus, src);
-        let result = self.gr.a as u16 + operand + carry;
-        self.gr.f = CPU::add_flags(self.gr.a as u16, operand as u16, result as u16);
-        self.gr.a = result as u8;
+    // sets flags
+    fn add8(&mut self, bus: &mut Bus, src: Operand, with_carry: bool) -> u8 {
+        let carry: u16 = if with_carry { self.gr.f as u16 & 1 } else { 0 };
+        let operand: u16 = self.load_operand(bus, src);
+        let result: u16 = self.gr.a as u16 + operand + carry;
+        self.gr.f = CPU::add_flags(self.gr.a as u16, operand as u16, result);
+
+        result as u8
     }
 
-    // Subtracts "src" from A, storing the result in A if saving is true
-    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Operand, with_borrow: bool, saving: bool) {
-        let carry = if with_borrow { self.gr.f & 1 } else { 0 };
-        let operand = self.load_operand(bus, src) as i32;
-        let result = self.gr.a as i32 - operand - carry as i32;
+    // Adds "src" to A, storing the result in A.
+    pub(super) fn add_a(&mut self, bus: &mut Bus, src: Operand, with_carry: bool) {
+        self.gr.a = self.add8(bus, src, with_carry);
+    }
 
-        // Same as add - but NF is set, not reset
-        self.gr.f = CPU::add_flags(self.gr.a as u16, operand as u16, result as u16);
-        self.gr.f ^= 0b0000_0010;
+    // Subtracts "src" from A, storing the result in A if "saving" is true
+    pub(super) fn sub_a(&mut self, bus: &mut Bus, src: Operand, with_borrow: bool, saving: bool) {
+        let subtrahend = Operand::Absolute(!self.load_operand(bus, src) as u8);
+        self.gr.f = if with_borrow { self.gr.f ^ 1 } else { self.gr.f | 1 };
+        let result = self.add8(bus, subtrahend, true);
+
+        // flip HF, CF, NF
+        self.gr.f ^= 0b0001_0011;
 
         if saving {
-            self.gr.a = result as u8;
+            self.gr.a = result;
         }
     }
 
@@ -66,8 +72,8 @@ impl CPU {
         let operand = Wrapping(self.load_operand(bus, src));
         let result = (operand - Wrapping(1)).0;
         self.store_operand(bus, src, result);
-        let flags = CPU::add_flags(operand.0, 1, result) & 0b1111_1100 | 0b0000_0010;
-        self.gr.f = flags | (self.gr.f & 0b1);
+        let flags = ((CPU::add_flags(operand.0, 0xff, result) & 0b1111_1100) | 0b0000_0010) ^ 0b0001_0000;
+        self.gr.f = flags | (self.gr.f & 1);
     }
 
     pub(super) fn inc(&mut self, bus: &mut Bus, src: Operand) {
@@ -405,6 +411,13 @@ mod alu_test {
         bus.add(ram.clone());
         cpu.reset();
 
+        // 0x20 - 0x10
+        //      0010_0000
+        //  -   0001_0000
+        //  +   1111_0000
+        //  =      0_0000
+        //  c  _  10_0000
+
         // Load up some register values
         cpu.write_reg(Register::B, 0x25);
         cpu.write_reg(Register::C, 0x73);
@@ -420,22 +433,46 @@ mod alu_test {
             ("sub m 2", 0xbe, 0xae, Flags::SF | Flags::NF),
             ("sub m 3", 0xbe, 0xfe, Flags::SF | Flags::NF | Flags::CF),
             // sbc m
-            ("sbc m 2", 0x20, 0x0f, Flags::HF | Flags::NF),
+            ("sbc m 1", 0x20, 0x0f, Flags::HF | Flags::NF),
             ("sbc m 2", 0x20, 0x10, Flags::NF),
             // sbc g
             ("sbc g 2", 0x25, 0x00, Flags::ZF | Flags::NF),
         ];
 
-        // 0x25 - 0x25 - set half-carry or not?
-        // As 8-bit addition of 2C:
-        //     0b0010_0101
-        // +   0b1101_1011 (!0x25 +1)
-        // = 0b1_0000_0000
-        // As 4-bit subtraction of 0x05 and (zero) carry:
-        //     0b0101
-        // -   0b0101
-        // =   0b0000 no carry, no half-carry
+        for (desc, a, val, flags) in &expected {
+            cpu.write_reg(Register::A, *a);
+            cpu.cycle(&mut bus);
+            assert_eq!(cpu.reg(Register::A), *val, "{}", *desc);
+            assert_eq!(cpu.flags(), *flags, "{}", *desc);
+        }
+    }
 
+    #[test]
+    fn sub_a_a() {
+        let mut bus = Bus::new();
+        let mut cpu = CPU::new(&mut bus);
+        let ram = Rc::new(RAM::new(0x0000, 0x10000));
+        ram.write(
+            0x0000,
+            &[
+                0x9f, //                sbc a, a
+            ],
+        );
+        bus.add(ram.clone());
+        cpu.reset();
+
+        // Prep. the flags register
+        cpu.write_reg(Register::F, 0b1101_0001);
+
+        //          0011_1111
+        //      +   1100_0001
+        //      =   0000_0000
+        //      c 1_1111_1110   half-carry set, half-
+
+        let expected = [
+            // sub m
+            ("sbc a, a", 0x3f, 0xff, Flags::SF | Flags::HF | Flags::NF | Flags::CF),
+        ];
         for (desc, a, val, flags) in &expected {
             cpu.write_reg(Register::A, *a);
             cpu.cycle(&mut bus);

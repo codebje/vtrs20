@@ -12,3 +12,4 @@ proc-macro2 = "1.0.18"
 syn = "1.0.31"
 emulator = { path = "../emulator" }
 num = "0.3.0"
+z80emu = "0.3.0"

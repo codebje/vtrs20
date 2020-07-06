@@ -34,6 +34,9 @@ impl RAM {
 impl Peripheral for RAM {
     fn mem_read(&self, address: u32) -> Option<u8> {
         if address >= self.start && address <= self.start + self.size {
+            if address == 0xC06F {
+                println!("Read of 0xC06F");
+            }
             return Some(self.bytes.borrow()[(address - self.start) as usize]);
         }
         None

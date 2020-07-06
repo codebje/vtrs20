@@ -6,6 +6,7 @@ impl CPU {
     pub(super) fn dispatch(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
         self.sr.pc += 1;
+        let errstr = format!("Base opcode {:02x}", opcode);
 
         // The full 256 opcode values are listed explicitly to allow a jump table to be
         // generated. It would be possible to use bitmasks to reduce the size of this list,
@@ -14,74 +15,74 @@ impl CPU {
             0b00_000_000 => self.nop(),
             0b00_000_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::BC)),
             0b00_000_010 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Indirect(RegIndirect::BC)),
-            0b00_000_011 => self.inc(bus, Operand::Direct(Register::BC)),
+            0b00_000_011 => self.inc16(bus, Operand::Direct(Register::BC)),
             0b00_000_100 => self.inc(bus, Operand::Direct(Register::B)),
             0b00_000_101 => self.dec(bus, Operand::Direct(Register::B)),
             0b00_000_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::B)),
             0b00_000_111 => self.rot_left(bus, Operand::Direct(Register::A), true),
 
             0b00_001_000 => self.exchange(bus, Exchange::AF_AFs),
-            0b00_001_001 => self.add_hl_ww(RegW::BC, false),
-            0b00_001_010 => self.error("dispatch"),
-            0b00_001_011 => self.dec(bus, Operand::Direct(Register::BC)),
+            0b00_001_001 => self.add16(Register::HL, Register::BC, false),
+            0b00_001_010 => self.ld_8(bus, Operand::Indirect(RegIndirect::BC), Operand::Direct(Register::A)),
+            0b00_001_011 => self.dec16(bus, Operand::Direct(Register::BC)),
             0b00_001_100 => self.inc(bus, Operand::Direct(Register::C)),
             0b00_001_101 => self.dec(bus, Operand::Direct(Register::C)),
             0b00_001_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::C)),
             0b00_001_111 => self.rot_right(bus, Operand::Direct(Register::A), true),
 
-            0b00_010_000 => self.error("dispatch"),
+            0b00_010_000 => self.error(&errstr),
             0b00_010_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::DE)),
             0b00_010_010 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Indirect(RegIndirect::DE)),
-            0b00_010_011 => self.inc(bus, Operand::Direct(Register::DE)),
+            0b00_010_011 => self.inc16(bus, Operand::Direct(Register::DE)),
             0b00_010_100 => self.inc(bus, Operand::Direct(Register::D)),
             0b00_010_101 => self.dec(bus, Operand::Direct(Register::D)),
             0b00_010_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::D)),
             0b00_010_111 => self.rot_left(bus, Operand::Direct(Register::A), false),
 
-            0b00_011_000 => self.error("dispatch"),
-            0b00_011_001 => self.add_hl_ww(RegW::DE, false),
+            0b00_011_000 => self.error(&errstr),
+            0b00_011_001 => self.add16(Register::HL, Register::DE, false),
             0b00_011_010 => self.ld_8(bus, Operand::Indirect(RegIndirect::DE), Operand::Direct(Register::A)),
-            0b00_011_011 => self.dec(bus, Operand::Direct(Register::DE)),
+            0b00_011_011 => self.dec16(bus, Operand::Direct(Register::DE)),
             0b00_011_100 => self.inc(bus, Operand::Direct(Register::E)),
             0b00_011_101 => self.dec(bus, Operand::Direct(Register::E)),
             0b00_011_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::E)),
-            0b00_011_111 => self.error("dispatch"),
+            0b00_011_111 => self.error(&errstr),
 
-            0b00_100_000 => self.error("dispatch"),
+            0b00_100_000 => self.error(&errstr),
             0b00_100_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::HL)),
             0b00_100_010 => self.ld_16(bus, Operand::Direct(Register::HL), Operand::Extended16()),
-            0b00_100_011 => self.inc(bus, Operand::Direct(Register::HL)),
+            0b00_100_011 => self.inc16(bus, Operand::Direct(Register::HL)),
             0b00_100_100 => self.inc(bus, Operand::Direct(Register::H)),
             0b00_100_101 => self.dec(bus, Operand::Direct(Register::H)),
             0b00_100_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::H)),
-            0b00_100_111 => self.error("dispatch"),
+            0b00_100_111 => self.error(&errstr),
 
-            0b00_101_000 => self.error("dispatch"),
-            0b00_101_001 => self.add_hl_ww(RegW::HL, false),
+            0b00_101_000 => self.error(&errstr),
+            0b00_101_001 => self.add16(Register::HL, Register::HL, false),
             0b00_101_010 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::HL)),
-            0b00_101_011 => self.dec(bus, Operand::Direct(Register::HL)),
+            0b00_101_011 => self.dec16(bus, Operand::Direct(Register::HL)),
             0b00_101_100 => self.inc(bus, Operand::Direct(Register::L)),
             0b00_101_101 => self.dec(bus, Operand::Direct(Register::L)),
             0b00_101_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::L)),
-            0b00_101_111 => self.error("dispatch"),
+            0b00_101_111 => self.error(&errstr),
 
-            0b00_110_000 => self.error("dispatch"),
+            0b00_110_000 => self.error(&errstr),
             0b00_110_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::SP)),
             0b00_110_010 => self.ld_16(bus, Operand::Direct(Register::A), Operand::Extended()),
-            0b00_110_011 => self.inc(bus, Operand::Direct(Register::SP)),
+            0b00_110_011 => self.inc16(bus, Operand::Direct(Register::SP)),
             0b00_110_100 => self.inc(bus, Operand::Indirect(RegIndirect::HL)),
             0b00_110_101 => self.dec(bus, Operand::Indirect(RegIndirect::HL)),
             0b00_110_110 => self.ld_8(bus, Operand::Immediate(), Operand::Indirect(RegIndirect::HL)),
-            0b00_110_111 => self.error("dispatch"),
+            0b00_110_111 => self.error(&errstr),
 
-            0b00_111_000 => self.error("dispatch"),
-            0b00_111_001 => self.add_hl_ww(RegW::SP, false),
+            0b00_111_000 => self.error(&errstr),
+            0b00_111_001 => self.add16(Register::HL, Register::SP, false),
             0b00_111_010 => self.ld_8(bus, Operand::Extended(), Operand::Direct(Register::A)),
-            0b00_111_011 => self.dec(bus, Operand::Direct(Register::SP)),
+            0b00_111_011 => self.dec16(bus, Operand::Direct(Register::SP)),
             0b00_111_100 => self.inc(bus, Operand::Direct(Register::A)),
             0b00_111_101 => self.dec(bus, Operand::Direct(Register::A)),
             0b00_111_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::A)),
-            0b00_111_111 => self.error("dispatch"),
+            0b00_111_111 => self.error(&errstr),
 
             0b01_000_000 => self.ld_8(bus, Operand::Direct(Register::B), Operand::Direct(Register::B)),
             0b01_000_001 => self.ld_8(bus, Operand::Direct(Register::C), Operand::Direct(Register::B)),
@@ -235,7 +236,7 @@ impl CPU {
             0b11_000_100 => self.call(bus, Operand::Immediate16(), Some(Condition::NonZero)),
             0b11_000_101 => self.push(bus, Operand::Direct(Register::BC)),
             0b11_000_110 => self.add_a(bus, Operand::Immediate(), false),
-            0b11_000_111 => self.error("dispatch"),
+            0b11_000_111 => self.error(&errstr),
 
             0b11_001_000 => self.ret(bus, Some(Condition::Zero)),
             0b11_001_001 => self.ret(bus, None),
@@ -244,25 +245,25 @@ impl CPU {
             0b11_001_100 => self.call(bus, Operand::Immediate16(), Some(Condition::Zero)),
             0b11_001_101 => self.call(bus, Operand::Immediate16(), None),
             0b11_001_110 => self.add_a(bus, Operand::Immediate(), true),
-            0b11_001_111 => self.error("dispatch"),
+            0b11_001_111 => self.error(&errstr),
 
             0b11_010_000 => self.ret(bus, Some(Condition::NonCarry)),
             0b11_010_001 => self.pop(bus, Operand::Direct(Register::DE)),
             0b11_010_010 => self.jp(bus, Operand::Immediate16(), Some(Condition::NonCarry)),
-            0b11_010_011 => self.error("dispatch"),
+            0b11_010_011 => self.error(&errstr),
             0b11_010_100 => self.call(bus, Operand::Immediate16(), Some(Condition::NonCarry)),
             0b11_010_101 => self.push(bus, Operand::Direct(Register::DE)),
             0b11_010_110 => self.sub_a(bus, Operand::Immediate(), false, true),
-            0b11_010_111 => self.error("dispatch"),
+            0b11_010_111 => self.error(&errstr),
 
             0b11_011_000 => self.ret(bus, Some(Condition::Carry)),
             0b11_011_001 => self.exchange(bus, Exchange::X),
             0b11_011_010 => self.jp(bus, Operand::Immediate16(), Some(Condition::Carry)),
-            0b11_011_011 => self.error("dispatch"),
+            0b11_011_011 => self.error(&errstr),
             0b11_011_100 => self.call(bus, Operand::Immediate16(), Some(Condition::Carry)),
             0b11_011_101 => self.index(bus, RegIndex::IX),
             0b11_011_110 => self.sub_a(bus, Operand::Immediate(), true, true),
-            0b11_011_111 => self.error("dispatch"),
+            0b11_011_111 => self.error(&errstr),
 
             0b11_100_000 => self.ret(bus, Some(Condition::ParityOdd)),
             0b11_100_001 => self.pop(bus, Operand::Direct(Register::HL)),
@@ -271,16 +272,16 @@ impl CPU {
             0b11_100_100 => self.call(bus, Operand::Immediate16(), Some(Condition::ParityOdd)),
             0b11_100_101 => self.push(bus, Operand::Direct(Register::HL)),
             0b11_100_110 => self.and_a(bus, Operand::Immediate()),
-            0b11_100_111 => self.error("dispatch"),
+            0b11_100_111 => self.error(&errstr),
 
             0b11_101_000 => self.ret(bus, Some(Condition::ParityEven)),
-            0b11_101_001 => self.error("dispatch"),
+            0b11_101_001 => self.error(&errstr),
             0b11_101_010 => self.jp(bus, Operand::Immediate16(), Some(Condition::ParityEven)),
             0b11_101_011 => self.exchange(bus, Exchange::DE_HL),
             0b11_101_100 => self.call(bus, Operand::Immediate16(), Some(Condition::ParityEven)),
             0b11_101_101 => self.extended(bus),
-            0b11_101_110 => self.error("dispatch"),
-            0b11_101_111 => self.error("dispatch"),
+            0b11_101_110 => self.xor_a(bus, Operand::Immediate()),
+            0b11_101_111 => self.error(&errstr),
 
             0b11_110_000 => self.ret(bus, Some(Condition::SignPlus)),
             0b11_110_001 => self.pop(bus, Operand::Direct(Register::AF)),
@@ -288,8 +289,8 @@ impl CPU {
             0b11_110_011 => self.di(),
             0b11_110_100 => self.call(bus, Operand::Immediate16(), Some(Condition::SignPlus)),
             0b11_110_101 => self.push(bus, Operand::Direct(Register::AF)),
-            0b11_110_110 => self.error("dispatch"),
-            0b11_110_111 => self.error("dispatch"),
+            0b11_110_110 => self.or_a(bus, Operand::Immediate()),
+            0b11_110_111 => self.error(&errstr),
 
             0b11_111_000 => self.ret(bus, Some(Condition::SignMinus)),
             0b11_111_001 => self.ld_16(bus, Operand::Direct(Register::HL), Operand::Direct(Register::SP)),
@@ -298,7 +299,7 @@ impl CPU {
             0b11_111_100 => self.call(bus, Operand::Immediate16(), Some(Condition::SignMinus)),
             0b11_111_101 => self.index(bus, RegIndex::IY),
             0b11_111_110 => self.sub_a(bus, Operand::Immediate(), false, false),
-            0b11_111_111 => self.error("dispatch"),
+            0b11_111_111 => self.error(&errstr),
         }
     }
 
@@ -307,6 +308,7 @@ impl CPU {
     fn extended(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
         self.sr.pc += 1;
+        let errstr = format!("Extended opcode {:02x}", opcode);
 
         match opcode {
             0b00_000_001 => self.out0(bus, Operand::Direct(Register::B), Operand::Immediate()),
@@ -322,17 +324,29 @@ impl CPU {
             0b01_100_010 => self.sub_hl_ww(RegW::HL, true),
             0b01_110_010 => self.sub_hl_ww(RegW::SP, true),
 
-            0b01_001_010 => self.add_hl_ww(RegW::BC, true),
-            0b01_011_010 => self.add_hl_ww(RegW::DE, true),
-            0b01_101_010 => self.add_hl_ww(RegW::HL, true),
-            0b01_111_010 => self.add_hl_ww(RegW::SP, true),
+            0b01_001_010 => self.add16(Register::HL, Register::BC, true),
+            0b01_011_010 => self.add16(Register::HL, Register::DE, true),
+            0b01_101_010 => self.add16(Register::HL, Register::HL, true),
+            0b01_111_010 => self.add16(Register::HL, Register::SP, true),
 
+            0b01_000_011 => self.ld_16(bus, Operand::Direct(Register::BC), Operand::Extended16()),
+            0b01_010_011 => self.ld_16(bus, Operand::Direct(Register::DE), Operand::Extended16()),
             0b01_110_011 => self.ld_16(bus, Operand::Direct(Register::SP), Operand::Extended16()),
+
+            0b01_001_011 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::BC)),
+            0b01_011_011 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::DE)),
             0b01_111_011 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::SP)),
 
-            0b10_110_000 => self.ldir(bus),
+            0b10_100_000 => self.ldi(bus, false),
+            0b10_110_000 => self.ldi(bus, true),
 
-            _ => self.error("extended"),
+            // Block transfers
+            0b10_101_000 => self.ldd(bus, false),
+            0b10_111_000 => self.ldd(bus, true),
+            0b10_101_001 => self.cpd(bus, false),
+            0b10_111_001 => self.cpd(bus, true),
+
+            _ => self.error(&errstr),
         }
     }
 
@@ -340,6 +354,7 @@ impl CPU {
     fn bits(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
         self.sr.pc += 1;
+        let errstr = format!("Bbitops opcode {:02x}", opcode);
 
         match opcode {
             // RLC g/(HL)
@@ -382,20 +397,203 @@ impl CPU {
             0b00_011_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), false),
             0b00_011_111 => self.rot_right(bus, Operand::Direct(Register::A), false),
 
-            _ => self.error("bits"),
+            // BIT 0, g
+            0b01_000_000 => self.bit(bus, 0, Operand::Direct(Register::B)),
+            0b01_000_001 => self.bit(bus, 0, Operand::Direct(Register::C)),
+            0b01_000_010 => self.bit(bus, 0, Operand::Direct(Register::D)),
+            0b01_000_011 => self.bit(bus, 0, Operand::Direct(Register::E)),
+            0b01_000_100 => self.bit(bus, 0, Operand::Direct(Register::H)),
+            0b01_000_101 => self.bit(bus, 0, Operand::Direct(Register::L)),
+            0b01_000_110 => self.bit(bus, 0, Operand::Indirect(RegIndirect::HL)),
+            0b01_000_111 => self.bit(bus, 0, Operand::Direct(Register::A)),
+
+            // BIT 1, g
+            0b01_001_000 => self.bit(bus, 1, Operand::Direct(Register::B)),
+            0b01_001_001 => self.bit(bus, 1, Operand::Direct(Register::C)),
+            0b01_001_010 => self.bit(bus, 1, Operand::Direct(Register::D)),
+            0b01_001_011 => self.bit(bus, 1, Operand::Direct(Register::E)),
+            0b01_001_100 => self.bit(bus, 1, Operand::Direct(Register::H)),
+            0b01_001_101 => self.bit(bus, 1, Operand::Direct(Register::L)),
+            0b01_001_110 => self.bit(bus, 1, Operand::Indirect(RegIndirect::HL)),
+            0b01_001_111 => self.bit(bus, 1, Operand::Direct(Register::A)),
+
+            // BIT 2, g
+            0b01_010_000 => self.bit(bus, 2, Operand::Direct(Register::B)),
+            0b01_010_001 => self.bit(bus, 2, Operand::Direct(Register::C)),
+            0b01_010_010 => self.bit(bus, 2, Operand::Direct(Register::D)),
+            0b01_010_011 => self.bit(bus, 2, Operand::Direct(Register::E)),
+            0b01_010_100 => self.bit(bus, 2, Operand::Direct(Register::H)),
+            0b01_010_101 => self.bit(bus, 2, Operand::Direct(Register::L)),
+            0b01_010_110 => self.bit(bus, 2, Operand::Indirect(RegIndirect::HL)),
+            0b01_010_111 => self.bit(bus, 2, Operand::Direct(Register::A)),
+
+            // BIT 3, g
+            0b01_011_000 => self.bit(bus, 3, Operand::Direct(Register::B)),
+            0b01_011_001 => self.bit(bus, 3, Operand::Direct(Register::C)),
+            0b01_011_010 => self.bit(bus, 3, Operand::Direct(Register::D)),
+            0b01_011_011 => self.bit(bus, 3, Operand::Direct(Register::E)),
+            0b01_011_100 => self.bit(bus, 3, Operand::Direct(Register::H)),
+            0b01_011_101 => self.bit(bus, 3, Operand::Direct(Register::L)),
+            0b01_011_110 => self.bit(bus, 3, Operand::Indirect(RegIndirect::HL)),
+            0b01_011_111 => self.bit(bus, 3, Operand::Direct(Register::A)),
+
+            // BIT 4, g
+            0b01_100_000 => self.bit(bus, 4, Operand::Direct(Register::B)),
+            0b01_100_001 => self.bit(bus, 4, Operand::Direct(Register::C)),
+            0b01_100_010 => self.bit(bus, 4, Operand::Direct(Register::D)),
+            0b01_100_011 => self.bit(bus, 4, Operand::Direct(Register::E)),
+            0b01_100_100 => self.bit(bus, 4, Operand::Direct(Register::H)),
+            0b01_100_101 => self.bit(bus, 4, Operand::Direct(Register::L)),
+            0b01_100_110 => self.bit(bus, 4, Operand::Indirect(RegIndirect::HL)),
+            0b01_100_111 => self.bit(bus, 4, Operand::Direct(Register::A)),
+
+            // BIT 5, g
+            0b01_101_000 => self.bit(bus, 5, Operand::Direct(Register::B)),
+            0b01_101_001 => self.bit(bus, 5, Operand::Direct(Register::C)),
+            0b01_101_010 => self.bit(bus, 5, Operand::Direct(Register::D)),
+            0b01_101_011 => self.bit(bus, 5, Operand::Direct(Register::E)),
+            0b01_101_100 => self.bit(bus, 5, Operand::Direct(Register::H)),
+            0b01_101_101 => self.bit(bus, 5, Operand::Direct(Register::L)),
+            0b01_101_110 => self.bit(bus, 5, Operand::Indirect(RegIndirect::HL)),
+            0b01_101_111 => self.bit(bus, 5, Operand::Direct(Register::A)),
+
+            // BIT 6, g
+            0b01_110_000 => self.bit(bus, 6, Operand::Direct(Register::B)),
+            0b01_110_001 => self.bit(bus, 6, Operand::Direct(Register::C)),
+            0b01_110_010 => self.bit(bus, 6, Operand::Direct(Register::D)),
+            0b01_110_011 => self.bit(bus, 6, Operand::Direct(Register::E)),
+            0b01_110_100 => self.bit(bus, 6, Operand::Direct(Register::H)),
+            0b01_110_101 => self.bit(bus, 6, Operand::Direct(Register::L)),
+            0b01_110_110 => self.bit(bus, 6, Operand::Indirect(RegIndirect::HL)),
+            0b01_110_111 => self.bit(bus, 6, Operand::Direct(Register::A)),
+
+            // BIT 7, g
+            0b01_111_000 => self.bit(bus, 7, Operand::Direct(Register::B)),
+            0b01_111_001 => self.bit(bus, 7, Operand::Direct(Register::C)),
+            0b01_111_010 => self.bit(bus, 7, Operand::Direct(Register::D)),
+            0b01_111_011 => self.bit(bus, 7, Operand::Direct(Register::E)),
+            0b01_111_100 => self.bit(bus, 7, Operand::Direct(Register::H)),
+            0b01_111_101 => self.bit(bus, 7, Operand::Direct(Register::L)),
+            0b01_111_110 => self.bit(bus, 7, Operand::Indirect(RegIndirect::HL)),
+            0b01_111_111 => self.bit(bus, 7, Operand::Direct(Register::A)),
+
+            _ => self.error(&errstr),
         }
+    }
+
+    fn resolve_index(&mut self, bus: &mut Bus, index: RegIndex) -> Operand {
+        let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+        self.sr.pc += 1;
+        Operand::Memory(self.reg(index) + d)
     }
 
     // Index register opcodes. The opcode sets are identical for IX and IY.
     fn index(&mut self, bus: &mut Bus, index: RegIndex) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        let errstr = format!("Index {:?} opcode {:02x}", index, opcode);
         self.sr.pc += 1;
 
         match opcode {
+            0b00_001_001 => self.add16(index.into(), Register::BC, false),
+            0b00_011_001 => self.add16(index.into(), Register::DE, false),
+            0b00_101_001 => self.add16(index.into(), index.into(), false),
+            0b00_111_001 => self.add16(index.into(), Register::SP, false),
+
+            0b00_100_011 => self.inc16(bus, Operand::Direct(index.into())),
+            0b00_101_011 => self.dec16(bus, Operand::Direct(index.into())),
+
+            0b00_100_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(index.into())),
+            0b00_100_010 => self.ld_16(bus, Operand::Direct(index.into()), Operand::Extended16()),
+            0b00_101_010 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(index.into())),
+
+            0b00_110_100 => {
+                let opval = self.resolve_index(bus, index);
+                self.inc(bus, opval);
+            }
+            0b00_110_101 => {
+                let opval = self.resolve_index(bus, index);
+                self.dec(bus, opval);
+            }
+
+            0b00_110_110 => {
+                let opval = self.resolve_index(bus, index);
+                self.ld_8(bus, Operand::Immediate(), opval);
+            }
+
+            0b01_000_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::B)),
+            0b01_001_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::C)),
+            0b01_010_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::D)),
+            0b01_011_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::E)),
+            0b01_100_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::H)),
+            0b01_101_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::L)),
+            0b01_111_110 => self.ld_8(bus, Operand::Indexed(index), Operand::Direct(Register::A)),
+
+            0b01_110_000 => self.ld_8(bus, Operand::Direct(Register::B), Operand::Indexed(index)),
+            0b01_110_001 => self.ld_8(bus, Operand::Direct(Register::C), Operand::Indexed(index)),
+            0b01_110_010 => self.ld_8(bus, Operand::Direct(Register::D), Operand::Indexed(index)),
+            0b01_110_011 => self.ld_8(bus, Operand::Direct(Register::E), Operand::Indexed(index)),
+            0b01_110_100 => self.ld_8(bus, Operand::Direct(Register::H), Operand::Indexed(index)),
+            0b01_110_101 => self.ld_8(bus, Operand::Direct(Register::L), Operand::Indexed(index)),
+            0b01_110_111 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Indexed(index)),
+
+            0b10_000_110 => self.add_a(bus, Operand::Indexed(index), false),
+            0b10_001_110 => self.add_a(bus, Operand::Indexed(index), true),
+
+            0b10_010_110 => self.sub_a(bus, Operand::Indexed(index), false, true),
+            0b10_011_110 => self.sub_a(bus, Operand::Indexed(index), true, true),
+
+            0b10_100_110 => self.and_a(bus, Operand::Indexed(index)),
+            0b10_101_110 => self.xor_a(bus, Operand::Indexed(index)),
+            0b10_110_110 => self.or_a(bus, Operand::Indexed(index)),
+            0b10_111_110 => self.sub_a(bus, Operand::Indexed(index), false, false),
+
             0b11_100_001 => self.pop(bus, Operand::Direct(index.into())),
             0b11_100_101 => self.push(bus, Operand::Direct(index.into())),
 
-            _ => self.error("index"),
+            0b11_001_011 => self.index_bits(bus, index),
+
+            _ => self.error(&errstr),
+        }
+    }
+
+    // Index bit manipulation opcodes. The opcode sets are identical for IX and IY.
+    fn index_bits(&mut self, bus: &mut Bus, index: RegIndex) {
+        let arg = self.resolve_index(bus, index);
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        self.sr.pc += 1;
+        let errstr = format!("Index {:?} bitops opcode {:02x}", index, opcode);
+
+        match opcode {
+            0b00_000_110 => self.rot_right(bus, arg, false),
+
+            0b01_000_110 => self.bit(bus, 0, arg),
+            0b01_001_110 => self.bit(bus, 1, arg),
+            0b01_010_110 => self.bit(bus, 2, arg),
+            0b01_011_110 => self.bit(bus, 3, arg),
+            0b01_100_110 => self.bit(bus, 4, arg),
+            0b01_101_110 => self.bit(bus, 5, arg),
+            0b01_110_110 => self.bit(bus, 6, arg),
+            0b01_111_110 => self.bit(bus, 7, arg),
+
+            0b10_000_110 => self.res(bus, 0, arg),
+            0b10_001_110 => self.res(bus, 1, arg),
+            0b10_010_110 => self.res(bus, 2, arg),
+            0b10_011_110 => self.res(bus, 3, arg),
+            0b10_100_110 => self.res(bus, 4, arg),
+            0b10_101_110 => self.res(bus, 5, arg),
+            0b10_110_110 => self.res(bus, 6, arg),
+            0b10_111_110 => self.res(bus, 7, arg),
+
+            0b11_000_110 => self.set(bus, 0, arg),
+            0b11_001_110 => self.set(bus, 1, arg),
+            0b11_010_110 => self.set(bus, 2, arg),
+            0b11_011_110 => self.set(bus, 3, arg),
+            0b11_100_110 => self.set(bus, 4, arg),
+            0b11_101_110 => self.set(bus, 5, arg),
+            0b11_110_110 => self.set(bus, 6, arg),
+            0b11_111_110 => self.set(bus, 7, arg),
+
+            _ => self.error(&errstr),
         }
     }
 }

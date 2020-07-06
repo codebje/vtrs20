@@ -48,6 +48,7 @@ fn eval<N>(expr: &Expr) -> Result<N>
 where
     N: std::ops::Neg<Output = N>,
     N: std::ops::Sub<Output = N>,
+    N: std::ops::Add<Output = N>,
     N: From<u16>,
     N: FromStr,
     N::Err: Display,
@@ -86,6 +87,7 @@ where
             let rv = eval::<N>(right)?;
             match op {
                 syn::BinOp::Sub(_) => Ok(lv - rv),
+                syn::BinOp::Add(_) => Ok(lv + rv),
                 _ => Err(Error::new(expr.span(), format!("unknown operator '{:?}'", op))),
             }
         }
@@ -106,10 +108,10 @@ fn parse_state(input: ParseStream) -> Result<ZexState> {
         return Err(Error::new(state.span(), "tstr requires exactly 13 elements"));
     }
     Ok(ZexState {
-        instruction: ((eval::<i32>(&state[0])? as u32) << 24)
-            | ((eval::<i32>(&state[1])? as u32) << 16)
-            | ((eval::<i32>(&state[2])? as u32) << 8)
-            | eval::<i32>(&state[3])? as u32,
+        instruction: ((eval::<i32>(&state[0])? as u32 & 0xff) << 24)
+            | ((eval::<i32>(&state[1])? as u32 & 0xff) << 16)
+            | ((eval::<i32>(&state[2])? as u32 & 0xff) << 8)
+            | (eval::<i32>(&state[3])? as u32 & 0xff),
         operand: eval::<i32>(&state[4])? as u16,
         iy: eval::<i32>(&state[5])? as u16,
         ix: eval::<i32>(&state[6])? as u16,
@@ -156,10 +158,7 @@ impl Parse for ZexTestCase {
         let crc3 = input.parse::<LitInt>()?.base10_parse::<u8>()?;
         input.parse::<Token![,]>()?;
         let crc4 = input.parse::<LitInt>()?.base10_parse::<u8>()?;
-        let crc = ((crc1 as u32) << 24)
-                | ((crc2 as u32) << 16)
-                | ((crc3 as u32) << 8)
-                | (crc4 as u32);
+        let crc = ((crc1 as u32) << 24) | ((crc2 as u32) << 16) | ((crc3 as u32) << 8) | (crc4 as u32);
 
         // Test description
         skip_comment(input, |stream| stream.peek(kw::tmsg))?;
@@ -213,7 +212,7 @@ pub fn testcase(input: TokenStream) -> TokenStream {
     let test_name = format_ident!("zex_{}", case.name);
     let flagmask = &case.flag_mask;
     let result = quote! {
-        //#[test]
+        #[test]
         fn #test_name() {
             #case
             assert_eq!(zex_run_test(&state, &increment, &shift, #flagmask), crc, "{}", msg);

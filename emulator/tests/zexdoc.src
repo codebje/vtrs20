@@ -155,7 +155,7 @@ tests:
 	dw	ld8imx
 	dw	ld8ix1
 	dw	ld8ix2
-	dw	ld8ix3
+	dw	ld8ix3	; 47th
 	dw	ld8ixy
 	dw	ld8rr
 	dw	ld8rrx

@@ -66,7 +66,7 @@ struct SR {
 #[allow(dead_code)]
 pub struct CPU {
     // internal state
-    mode: Mode,
+    pub mode: Mode,
     mmu: Rc<mmu::MMU>,
     gr: GR,
     gr_: GR,
@@ -192,13 +192,14 @@ impl CPU {
     // enter an error state
     fn error(&mut self, cause: &str) {
         self.mode = Mode::Halt;
-        self.sr.pc -= 1;
         println!("Illegal instruction (PC=${:04x}). Halt. {}", self.sr.pc, cause);
     }
 
-    // Load an operand using an addressing mode. Will adjust PC as needed.
+    // Load an operand using an addressing mode.
     fn load_operand(&mut self, bus: &mut Bus, operand: Operand) -> u16 {
         match operand {
+            Operand::Absolute(v) => v as u16,
+            Operand::Memory(addr) => bus.mem_read(self.mmu.to_physical(addr)) as u16,
             Operand::Direct(reg) => self.reg(reg),
             Operand::Indirect(reg) => bus.mem_read(self.mmu.to_physical(self.reg(reg))) as u16,
             Operand::Indexed(reg) => {
@@ -246,6 +247,8 @@ impl CPU {
     // Store a result into an operand. This will halt the CPU on Immediate or Relative.
     fn store_operand(&mut self, bus: &mut Bus, operand: Operand, value: u16) {
         match operand {
+            Operand::Absolute(_) => self.error("Upate of absolute value"),
+            Operand::Memory(addr) => bus.mem_write(self.mmu.to_physical(addr), value as u8),
             Operand::Direct(reg) => self.write_reg(reg, value),
             Operand::Indirect(reg) => bus.mem_write(self.mmu.to_physical(self.reg(reg)), value as u8),
             Operand::Indexed(reg) => {
@@ -286,185 +289,6 @@ impl CPU {
             Some(Condition::SignPlus) => self.gr.f & CPU::FLAG_S == 0,
             Some(Condition::SignMinus) => self.gr.f & CPU::FLAG_S != 0,
             None => true,
-        }
-    }
-}
-
-#[cfg(test)]
-mod cpu_test {
-    use std::io::{stdout, Write};
-    use std::rc::Rc;
-    use std::time;
-
-    use crate::bus::Bus;
-    use crate::cpu::{Peripheral, CPU, Register};
-    use crate::ram::RAM;
-
-    struct CIO {}
-
-    impl CIO {
-        fn new() -> CIO {
-            CIO {}
-        }
-    }
-
-    impl Peripheral for CIO {
-        fn io_write(&self, address: u16, data: u8) {
-            if address == 0xff {
-                print!("{}", data as char);
-                stdout().flush().unwrap();
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    fn print_cpu(cpu: &CPU, bus: &mut Bus) {
-        let opcodes = [
-            bus.mem_read(cpu.sr.pc as u32), // assume identity MMU
-            bus.mem_read(cpu.sr.pc as u32 + 1),
-            bus.mem_read(cpu.sr.pc as u32 + 2),
-            bus.mem_read(cpu.sr.pc as u32 + 3),
-            bus.mem_read(cpu.sr.pc as u32 + 4),
-            bus.mem_read(cpu.sr.pc as u32 + 5),
-        ];
-        println!(
-            "PC=${:04x}, opcode=${:02x} (0b{:08b}) \
-                A=${:02x} BC=${:04x} DE=${:04x} HL=${:04x} \
-                {}{}-{}-{}{}{}   {}",
-            cpu.sr.pc,
-            opcodes[0],
-            opcodes[0],
-            cpu.gr.a,
-            cpu.gr.bc,
-            cpu.gr.de,
-            cpu.gr.hl,
-            if cpu.gr.f & 0b1000_0000 != 0 { 'S' } else { 's' },
-            if cpu.gr.f & 0b0100_0000 != 0 { 'Z' } else { 'z' },
-            if cpu.gr.f & 0b0001_0000 != 0 { 'H' } else { 'h' },
-            if cpu.gr.f & 0b0000_0100 != 0 { 'P' } else { 'p' },
-            if cpu.gr.f & 0b0000_0010 != 0 { 'N' } else { 'n' },
-            if cpu.gr.f & 0b0000_0001 != 0 { 'C' } else { 'c' },
-            crate::disasm::disasm(&opcodes),
-        );
-    }
-
-    #[allow(dead_code)]
-    fn print_test(_cpu: &CPU, bus: &mut Bus) {
-        let data = [
-            // iut:
-            bus.mem_read(0x1d42),
-            bus.mem_read(0x1d43),
-            bus.mem_read(0x1d44),
-            bus.mem_read(0x1d45),
-            // msbt(hl):
-            bus.mem_read(0x103+6),
-            bus.mem_read(0x103+7),
-            // msat(hl):
-            bus.mem_read(0x1d7d+6),
-            bus.mem_read(0x1d7d+7),
-            // crcval:
-            bus.mem_read(0x1e85),
-            bus.mem_read(0x1e86),
-            bus.mem_read(0x1e87),
-            bus.mem_read(0x1e88),
-        ];
-        println!(
-            "Test state: instr={:02x}{:02x}{:02x}{:02x} hl={:02x}{:02x}->{:02x}{:02x} crc={:02x}{:02x}{:02x}{:02x}",
-            // iut
-            data[0],
-            data[1],
-            data[2],
-            data[3],
-            // msbt(hl) (byteorder swap)
-            data[5],
-            data[4],
-            // msat(hl) (byteorder swap)
-            data[7],
-            data[6],
-            // crcval
-            data[8],
-            data[9],
-            data[10],
-            data[11],
-        );
-    }
-
-    #[test]
-    fn zexdoc() {
-        let mut bus = Bus::new();
-        let mut cpu = CPU::new(&mut bus);
-        let ram = Rc::new(RAM::new(0x0000, 0x10000));
-        // CPM control
-        ram.write(
-            0x0,
-            &[
-                0xC3, 0x1E, 0x00, //            JP   boot
-                0x00, //                        NOP
-                0x00, //                        NOP
-                0x3E, 0x02, //        CPM:      LD   a,2
-                0xB9, //                        CP   c
-                0xCA, 0x1A, 0x00, //            JP   z,oute
-                0x62, 0x6B, //                  LD   hl,de
-                0x7E, //              LOOP:     LD   a,(hl)
-                0xFE, 0x24, //                  CP   '$'
-                0xCA, 0x1D, 0x00, //            JP   z,done
-                0xED, 0x39, 0xFF, //            OUT0 (0xff), a
-                0x23, //                        INC   hl
-                0xC3, 0x0D, 0x00, //            JP   loop
-                0xED, 0x19, 0xFF, //  OUTE:     OUT0 (0xff), e
-                0xC9, //              DONE:     RET
-                0x21, 0x00, 0x00, //  BOOT:     LD   hl,0
-                0x36, 0x76, //                  LD   (hl),0x76 ; HALT
-                0xC3, 0x00, 0x01, //            JP   0x100
-            ],
-        );
-        ram.load_file(0x100, "tests/zexdoc.com")
-            .expect("Loading ZEXDOC test binary");
-        bus.add(ram.clone());
-
-        let cio = CIO::new();
-        bus.add(Rc::new(cio));
-
-        // Run until HALT is executed
-        cpu.reset();
-        let mut loops = 0u64;
-        let mut now = time::Instant::now();
-        loop {
-            cpu.cycle(&mut bus);
-            if cpu.sr.pc == 0x1b24 {
-                println!("");
-            }
-            if cpu.sr.pc == 0x122 {
-                if loops > 0 {
-                    println!("Test completed {} iterations in {}s", loops, now.elapsed().as_secs());
-                    now = time::Instant::now();
-                }
-                // test completed
-                loops = 0;
-            }
-/*            if cpu.sr.pc == 0x1cad {
-                println!("Shifter called");
-            }
-            if cpu.sr.pc == 0x1d7c {
-                print_test(&cpu, &mut bus);
-            }
-            */
-            if cpu.sr.pc == 0x1b27 {
-                // read the current CRC
-                let data = [
-                    bus.mem_read(0x1e85),
-                    bus.mem_read(0x1e86),
-                    bus.mem_read(0x1e87),
-                    bus.mem_read(0x1e88),
-                ];
-                println!("iteration {} crc = {:02x}{:02x}{:02x}{:02x}",
-                    loops, data[0], data[1], data[2], data[3]);
-                loops += 1;
-            }
-            if cpu.mode == crate::cpu::Mode::Halt {
-                print_cpu(&cpu, &mut bus);
-                break;
-            }
         }
     }
 }

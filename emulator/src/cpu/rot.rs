@@ -35,6 +35,24 @@ impl CPU {
         self.gr.f = (self.gr.f & 0b1110_1100) | (src & 1) as u8;
         self.store_operand(bus, operand, result);
     }
+
+    pub(super) fn bit(&mut self, bus: &mut Bus, bit: u8, src: Operand) {
+        let data = self.load_operand(bus, src) as u8;
+
+        self.gr.f |= 0b0001_0000; // half-carry is set
+        self.gr.f &= 0b1011_1101; // negative is reset, clear zero
+        self.gr.f |= ((!data >> bit) & 1) << 6;
+    }
+
+    pub(super) fn set(&mut self, bus: &mut Bus, bit: u8, src: Operand) {
+        let data = self.load_operand(bus, src);
+        self.store_operand(bus, src, data | (1 << bit));
+    }
+
+    pub(super) fn res(&mut self, bus: &mut Bus, bit: u8, src: Operand) {
+        let data = self.load_operand(bus, src);
+        self.store_operand(bus, src, data & !(1 << bit));
+    }
 }
 
 #[cfg(test)]

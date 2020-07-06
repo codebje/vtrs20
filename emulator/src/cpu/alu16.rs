@@ -1,3 +1,6 @@
+use std::num::Wrapping;
+
+use crate::bus::Bus;
 use crate::cpu::enums::*;
 use crate::cpu::CPU;
 
@@ -8,15 +11,15 @@ use crate::cpu::CPU;
  */
 
 impl CPU {
-    pub(super) fn add_hl_ww(&mut self, ww: RegW, with_carry: bool) {
+    pub(super) fn add16(&mut self, xx: Register, ww: Register, with_carry: bool) {
         let carry = if with_carry { self.gr.f & Flags::CF.bits() } else { 0 };
-        let value = self.reg(ww) as u32;
-        let hl = self.gr.hl as u32;
-        let result = hl + value + carry as u32;
+        let value = self.reg(ww);
+        let src = self.reg(xx);
+        let result = src as u32 + value as u32 + carry as u32;
 
         // For no reason ADC HL, ww sets SF, ZF, V; ADD HL, ww does not.
         if with_carry {
-            let signs = (self.gr.hl ^ value as u16 ^ 0b1000_0000_0000_0000) & (self.gr.hl ^ result as u16);
+            let signs = (src ^ value ^ 0b1000_0000_0000_0000) & (src ^ result as u16);
             self.gr.f = ((result & 0b1000_0000_0000_0000) >> 8) as u8
                 | (if (result & 0xffff) == 0 { 0b0100_0000 } else { 0 }) as u8
                 | ((signs >> 13) & 0b0000_0100) as u8
@@ -26,7 +29,17 @@ impl CPU {
             self.gr.f = (self.gr.f & 0b1111_1100) | ((result >> 16) & 0b0000_0001) as u8;
         }
 
-        self.gr.hl = result as u16;
+        self.write_reg(xx, result as u16);
+    }
+
+    pub(super) fn inc16(&mut self, bus: &mut Bus, reg: Operand) {
+        let src = self.load_operand(bus, reg);
+        self.store_operand(bus, reg, (Wrapping(src) + Wrapping(1)).0);
+    }
+
+    pub(super) fn dec16(&mut self, bus: &mut Bus, reg: Operand) {
+        let src = self.load_operand(bus, reg);
+        self.store_operand(bus, reg, (Wrapping(src) - Wrapping(1)).0);
     }
 
     pub(super) fn sub_hl_ww(&mut self, ww: RegW, borrow: bool) {
@@ -39,8 +52,8 @@ impl CPU {
         // overflow flag set if pos+pos=neg or neg+neg=pos
         // negative flag always set
         // carry flag set if result is negative
-        let signs = (self.gr.hl ^ operand as u16 ^ 0b1000_0000_0000_0000) & (self.gr.hl ^ result as u16);
-        self.gr.f = (result & 0b1000_0000_0000_0000 >> 8) as u8
+        let signs = (self.gr.hl ^ operand as u16) & (self.gr.hl ^ result as u16);
+        self.gr.f = ((result & 0b1000_0000_0000_0000) >> 8) as u8
             | (if (result & 0xffff) == 0 { 0b0100_0000 } else { 0 }) as u8
             | ((signs >> 13) & 0b0000_0100) as u8
             | Flags::NF.bits()
@@ -140,6 +153,48 @@ mod alu_test {
             cpu.cycle(&mut bus);
             assert_eq!(cpu.gr.hl, *val, "{} HL, {}", *op, *reg);
             assert_eq!(cpu.flags(), *flags, "{} HL, {}", *op, *reg);
+        }
+    }
+
+    #[test]
+    fn sbc_hl_ww() {
+        let mut bus = Bus::new();
+        let mut cpu = CPU::new(&mut bus);
+        let ram = Rc::new(RAM::new(0x0000, 0x10000));
+        ram.write(
+            0x0000,
+            &[
+                0x3e, 0x01, //          ld a, 1
+                0xc6, 0xff, //          add a, $ff
+                0x01, 0x1f, 0x7e, //    ld bc, $1499
+                0x11, 0xff, 0x3f, //    ld de, $3fff
+                0x21, 0x38, 0xb3, //    ld hl, $b338
+                0x31, 0x5e, 0x46, //    ld sp, $465e
+                0xed, 0x42, //          sbc hl, bc
+                0xed, 0x52, //          sbc hl, de
+                0xed, 0x62, //          sbc hl, hl
+                0xed, 0x72, //          sbc hl, sp
+                0xed, 0x72, //          sbc hl, sp
+            ],
+        );
+        bus.add(ram.clone());
+        cpu.reset();
+        for _ in 0..6 {
+            cpu.cycle(&mut bus)
+        }
+
+        let expected = [
+            (Register::BC, 0x3518, Flags::NF | Flags::VF),
+            (Register::DE, 0xf519, Flags::NF | Flags::CF | Flags::SF),
+            (Register::HL, 0xffff, Flags::NF | Flags::CF | Flags::SF),
+            (Register::SP, 0xb9a0, Flags::NF | Flags::SF),
+            (Register::SP, 0x7342, Flags::NF | Flags::VF),
+        ];
+
+        for (reg, val, flags) in &expected {
+            cpu.cycle(&mut bus);
+            assert_eq!(cpu.gr.hl, *val, "SBC HL, {}", *reg);
+            assert_eq!(cpu.flags(), *flags, "SBC HL, {}", *reg);
         }
     }
 }
