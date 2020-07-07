@@ -2,7 +2,7 @@ use std::num::Wrapping;
 
 use crate::bus::Bus;
 use crate::cpu::enums::*;
-use crate::cpu::CPU;
+use crate::cpu::{CheckFlags, CPU};
 
 /**
  * Arithmetic and Logical Functions (8-bit)
@@ -66,6 +66,22 @@ impl CPU {
         if saving {
             self.gr.a = result;
         }
+    }
+
+    pub(super) fn neg(&mut self) {
+        let a = (Wrapping(0) - Wrapping(self.gr.a)).0;
+        self.gr.f = a.sign()
+            | a.zero()
+            | 0b0000_0010
+            | if a == 0x80 { 0b0000_0100 } else { 0 }
+            | if self.gr.a != 0 { 0b0000_0001 } else { 0 }
+            | if self.gr.a & 0xf != 0 { 0b0001_0000 } else { 0 };
+        self.gr.a = a;
+    }
+
+    pub(super) fn cpl(&mut self) {
+        self.gr.a = !self.gr.a;
+        self.gr.f |= 0b0001_0010;
     }
 
     pub(super) fn dec(&mut self, bus: &mut Bus, src: Operand) {

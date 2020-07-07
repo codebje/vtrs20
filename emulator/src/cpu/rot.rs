@@ -1,6 +1,6 @@
 use crate::bus::Bus;
 use crate::cpu::enums::*;
-use crate::cpu::CPU;
+use crate::cpu::{CheckFlags, CPU};
 
 /**
  * Rotate and Shift Instructions
@@ -9,31 +9,79 @@ use crate::cpu::CPU;
  */
 
 impl CPU {
-    pub(super) fn rot_left(&mut self, bus: &mut Bus, operand: Operand, carry: bool) {
+    pub(super) fn rot_left(&mut self, bus: &mut Bus, operand: Operand, op: ShiftOp, mode: ShiftMode) {
         let mut src = self.load_operand(bus, operand) << 1;
-        if carry {
-            // RLCA sets bit 0 to bit 8
-            src |= src >> 8;
-        } else {
-            // RLA sets bit 0 to CF
-            src |= (self.gr.f & 0b1) as u16;
+
+        if op == ShiftOp::ShiftL {
+            self.warn("Illegal instruction: shift left logical");
         }
-        self.gr.f = (self.gr.f & 0b1110_1100) | (src >> 8) as u8;
+
+        match op {
+            ShiftOp::Rot => src |= (self.gr.f & 0b1) as u16,
+            ShiftOp::RotC => src |= src >> 8,
+            ShiftOp::ShiftA => (),
+            ShiftOp::ShiftL => src |= 1,
+        }
+
+        match mode {
+            // 8080 rotates preserve S, Z, and P/V, reset H and N, and modify C.
+            ShiftMode::R8080 => self.gr.f = self.gr.f & 0b1100_0100,
+
+            // Z80 rotates modify S, Z, P, and C, and reset H and N.
+            ShiftMode::RZ80 => self.gr.f = src.sign() | src.zero() | src.parity(),
+        }
+        self.gr.f |= (src >> 8) as u8;
+
         self.store_operand(bus, operand, src);
     }
 
-    pub(super) fn rot_right(&mut self, bus: &mut Bus, operand: Operand, carry: bool) {
+    pub(super) fn rot_right(&mut self, bus: &mut Bus, operand: Operand, op: ShiftOp, mode: ShiftMode) {
         let src = self.load_operand(bus, operand);
         let mut result = src >> 1;
-        if carry {
-            // RRCA sets bit 7 to bit 0
-            result |= src << 7;
-        } else {
-            // RRA sets bit 7 to CF
-            result |= (self.gr.f & 0b1 << 7) as u16;
+
+        match op {
+            ShiftOp::Rot => result |= ((self.gr.f & 0b1) << 7) as u16,
+            ShiftOp::RotC => result |= src << 7,
+            ShiftOp::ShiftA => result |= src & 0b1000_0000,
+            ShiftOp::ShiftL => (),
         }
-        self.gr.f = (self.gr.f & 0b1110_1100) | (src & 1) as u8;
+
+        match mode {
+            // 8080 rotates preserve S, Z, and P/V, reset H and N, and modify C.
+            ShiftMode::R8080 => self.gr.f = self.gr.f & 0b1100_0100,
+
+            // Z80 rotates modify S, Z, P, and C, and reset H and N.
+            ShiftMode::RZ80 => self.gr.f = result.sign() | result.zero() | result.parity(),
+        }
+        self.gr.f |= (src as u8) & 0b0000_0001;
+
         self.store_operand(bus, operand, result);
+    }
+
+    // low nibble of (hl) moves to high nibble of (hl)
+    // high nibble of (hl) moves to low nibble of a
+    // low nibble of a moves to low nibble of (hl)
+    pub(super) fn rld(&mut self, bus: &mut Bus) {
+        let hl = bus.mem_read(self.mmu.to_physical(self.gr.hl));
+        let a = self.gr.a & 0xf0 | ((hl & 0xf0) >> 4);
+        let result = ((hl & 0x0f) << 4) | self.gr.a & 0x0f;
+        bus.mem_write(self.mmu.to_physical(self.gr.hl), result);
+        self.gr.a = a;
+        // TODO the z180 sets flags based on result, not a, but the z80 sets flags based on a
+        self.gr.f = a.sign() | a.zero() | a.parity() | self.gr.f & 1;
+    }
+
+    // low nibble of a moves to high nibble of (hl)
+    // high nibble of (hl) moves to low nibble of (hl)
+    // low nibble of (hl) moves to a
+    pub(super) fn rrd(&mut self, bus: &mut Bus) {
+        let hl = bus.mem_read(self.mmu.to_physical(self.gr.hl));
+        let a = self.gr.a & 0xf0 | (hl & 0x0f);
+        let result = ((hl & 0xf0) >> 4) | ((self.gr.a & 0x0f) << 4);
+        bus.mem_write(self.mmu.to_physical(self.gr.hl), result);
+        self.gr.a = a;
+        // TODO the z180 sets flags based on result, not a, but the z80 sets flags based on a
+        self.gr.f = a.sign() | a.zero() | a.parity() | self.gr.f & 1;
     }
 
     pub(super) fn bit(&mut self, bus: &mut Bus, bit: u8, src: Operand) {

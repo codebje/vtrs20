@@ -301,14 +301,40 @@ fn extended(opcodes: &[u8]) -> String {
         0b00_101_001 => format!("out0\t(${:02x}), l", opcodes[1]),
         0b00_111_001 => format!("out0\t(${:02x}), a", opcodes[1]),
 
+        0b01_000_100 => "neg".to_string(),
+
         0b01_001_011 => format!("ld\tbc,(${:02x}{:02x})", opcodes[2], opcodes[1]),
         0b01_011_011 => format!("ld\tde,(${:02x}{:02x})", opcodes[2], opcodes[1]),
 
         0b01_110_011 => format!("ld\t(${:02x}{:02x}), sp", opcodes[2], opcodes[1]),
         0b01_111_011 => format!("ld\tsp, (${:02x}{:02x})", opcodes[2], opcodes[1]),
 
+        0b01_100_111 => "rrd".to_string(),
+        0b01_101_111 => "rld".to_string(),
+
         0b10_100_000 => "ldi".to_string(),
         0b10_110_000 => "ldir".to_string(),
+
+        0b10_100_001 => "cpi".to_string(),
+        0b10_110_001 => "cpir".to_string(),
+
+        0b10_100_010 => "ini".to_string(),
+        0b10_110_010 => "inir".to_string(),
+
+        0b10_100_011 => "outi".to_string(),
+        0b10_110_011 => "outir".to_string(),
+
+        0b10_101_000 => "ldd".to_string(),
+        0b10_111_000 => "lddr".to_string(),
+
+        0b10_101_001 => "cpd".to_string(),
+        0b10_111_001 => "cpdr".to_string(),
+
+        0b10_101_010 => "ind".to_string(),
+        0b10_111_010 => "indr".to_string(),
+
+        0b10_101_011 => "outd".to_string(),
+        0b10_111_011 => "outdr".to_string(),
 
         _ => format!("extd\t${:02x}", opcodes[0]),
     }
@@ -317,45 +343,86 @@ fn extended(opcodes: &[u8]) -> String {
 fn bits(opcodes: &[u8]) -> String {
     match opcodes[0] {
         // RLC g/(HL)
-        //0b00_000_000 => "rot_left\tb, true",
-        //0b00_000_001 => "rot_left\tc, true",
-        //0b00_000_010 => "rot_left\td, true",
-        //0b00_000_011 => "rot_left\te, true",
-        //0b00_000_100 => "rot_left\th, true",
-        //0b00_000_101 => "rot_left\tl, true",
-        //0b00_000_110 => "rot_left\t(hl), true",
-        //0b00_000_111 => "rot_left\ta, true",
+        0b00_000_000 => "rlc\tb".to_string(),
+        0b00_000_001 => "rlc\tc".to_string(),
+        0b00_000_010 => "rlc\td".to_string(),
+        0b00_000_011 => "rlc\te".to_string(),
+        0b00_000_100 => "rlc\th".to_string(),
+        0b00_000_101 => "rlc\tl".to_string(),
+        0b00_000_110 => "rlc\t(hl)".to_string(),
+        0b00_000_111 => "rlc\ta".to_string(),
 
         // RRC g/(HL)
-        //0b00_001_000 => "rot_right\tb, true",
-        //0b00_001_001 => "rot_right\tc, true",
-        //0b00_001_010 => "rot_right\td, true",
-        //0b00_001_011 => "rot_right\te, true",
-        //0b00_001_100 => "rot_right\th, true",
-        //0b00_001_101 => "rot_right\tl, true",
-        //0b00_001_110 => "rot_right\t(hl), true",
-        //0b00_001_111 => "rot_right\ta, true",
+        0b00_001_000 => "rrc\tb".to_string(),
+        0b00_001_001 => "rrc\tc".to_string(),
+        0b00_001_010 => "rrc\td".to_string(),
+        0b00_001_011 => "rrc\te".to_string(),
+        0b00_001_100 => "rrc\th".to_string(),
+        0b00_001_101 => "rrc\tl".to_string(),
+        0b00_001_110 => "rrc\t(hl)".to_string(),
+        0b00_001_111 => "rrc\ta".to_string(),
 
         // RL g/(HL)
-        //0b00_010_000 => "rot_left\tb, false",
-        //0b00_010_001 => "rot_left\tc, false",
-        //0b00_010_010 => "rot_left\td, false",
-        //0b00_010_011 => "rot_left\te, false",
-        //0b00_010_100 => "rot_left\th, false",
-        //0b00_010_101 => "rot_left\tl, false",
-        //0b00_010_110 => "rot_left\t(hl), false",
-        //0b00_010_111 => "rot_left\ta, false",
+        0b00_010_000 => "rl\tb".to_string(),
+        0b00_010_001 => "rl\tc".to_string(),
+        0b00_010_010 => "rl\td".to_string(),
+        0b00_010_011 => "rl\te".to_string(),
+        0b00_010_100 => "rl\th".to_string(),
+        0b00_010_101 => "rl\tl".to_string(),
+        0b00_010_110 => "rl\t(hl)".to_string(),
+        0b00_010_111 => "rl\ta".to_string(),
 
         // RR g/(HL)
-        //0b00_011_000 => "rot_right\tb, false",
-        //0b00_011_001 => "rot_right\tc, false",
-        //0b00_011_010 => "rot_right\td, false",
-        //0b00_011_011 => "rot_right\te, false",
-        //0b00_011_100 => "rot_right\th, false",
-        //0b00_011_101 => "rot_right\tl, false",
-        //0b00_011_110 => "rot_right\t(hl), false",
-        //0b00_011_111 => "rot_right\ta, false",
-        _ => format!("bits\t${:02x}", opcodes[1]),
+        0b00_011_000 => "rr\tb".to_string(),
+        0b00_011_001 => "rr\tc".to_string(),
+        0b00_011_010 => "rr\td".to_string(),
+        0b00_011_011 => "rr\te".to_string(),
+        0b00_011_100 => "rr\th".to_string(),
+        0b00_011_101 => "rr\tl".to_string(),
+        0b00_011_110 => "rr\t(hl)".to_string(),
+        0b00_011_111 => "rr\ta".to_string(),
+
+        // SLA g/(HL)
+        0b00_100_000 => "sla\tb".to_string(),
+        0b00_100_001 => "sla\tc".to_string(),
+        0b00_100_010 => "sla\td".to_string(),
+        0b00_100_011 => "sla\te".to_string(),
+        0b00_100_100 => "sla\th".to_string(),
+        0b00_100_101 => "sla\tl".to_string(),
+        0b00_100_110 => "sla\t(hl)".to_string(),
+        0b00_100_111 => "sla\ta".to_string(),
+
+        // SRA g/(HL)
+        0b00_101_000 => "sra\tb".to_string(),
+        0b00_101_001 => "sra\tc".to_string(),
+        0b00_101_010 => "sra\td".to_string(),
+        0b00_101_011 => "sra\te".to_string(),
+        0b00_101_100 => "sra\th".to_string(),
+        0b00_101_101 => "sra\tl".to_string(),
+        0b00_101_110 => "sra\t(hl)".to_string(),
+        0b00_101_111 => "sra\ta".to_string(),
+
+        // SLL g/(HL)
+        0b00_110_000 => "sll!\tb".to_string(),
+        0b00_110_001 => "sll!\tc".to_string(),
+        0b00_110_010 => "sll!\td".to_string(),
+        0b00_110_011 => "sll!\te".to_string(),
+        0b00_110_100 => "sll!\th".to_string(),
+        0b00_110_101 => "sll!\tl".to_string(),
+        0b00_110_110 => "sll!\t(hl)".to_string(),
+        0b00_110_111 => "sll!\ta".to_string(),
+
+        // SRA g/(HL)
+        0b00_111_000 => "srl\tb".to_string(),
+        0b00_111_001 => "srl\tc".to_string(),
+        0b00_111_010 => "srl\td".to_string(),
+        0b00_111_011 => "srl\te".to_string(),
+        0b00_111_100 => "srl\th".to_string(),
+        0b00_111_101 => "srl\tl".to_string(),
+        0b00_111_110 => "srl\t(hl)".to_string(),
+        0b00_111_111 => "srl\ta".to_string(),
+
+        _ => format!("bits\t${:02x}", opcodes[0]),
     }
 }
 
@@ -377,10 +444,6 @@ fn index(opcodes: &[u8], reg: &str) -> String {
         0b00_110_100 => format!("inc\t({}+{})", reg, opcodes[1]),
         0b00_110_101 => format!("dec\t({}+{})", reg, opcodes[1]),
 
-        // 0b00_110_110 => {
-        //     let opval = self.resolve_index(bus, index);
-        //     self.ld_8(bus, Operand::Immediate(), opval);
-        // }
         0b01_000_110 => format!("ld\tb, ({}+{})", reg, opcodes[1]),
         0b01_001_110 => format!("ld\tc, ({}+{})", reg, opcodes[1]),
         0b01_010_110 => format!("ld\td, ({}+{})", reg, opcodes[1]),
@@ -389,29 +452,50 @@ fn index(opcodes: &[u8], reg: &str) -> String {
         0b01_101_110 => format!("ld\tl, ({}+{})", reg, opcodes[1]),
         0b01_111_110 => format!("ld\ta, ({}+{})", reg, opcodes[1]),
 
-        // 0b01_110_000 => self.ld_8(bus, Operand::Direct(Register::B), Operand::Indexed(index)),
-        // 0b01_110_001 => self.ld_8(bus, Operand::Direct(Register::C), Operand::Indexed(index)),
-        // 0b01_110_010 => self.ld_8(bus, Operand::Direct(Register::D), Operand::Indexed(index)),
-        // 0b01_110_011 => self.ld_8(bus, Operand::Direct(Register::E), Operand::Indexed(index)),
-        // 0b01_110_100 => self.ld_8(bus, Operand::Direct(Register::H), Operand::Indexed(index)),
-        // 0b01_110_101 => self.ld_8(bus, Operand::Direct(Register::L), Operand::Indexed(index)),
-        // 0b01_110_111 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Indexed(index)),
+        0b11_001_011 => index_bits(&opcodes[1..], reg),
 
-        // 0b10_000_110 => self.add_a(bus, Operand::Indexed(index), false),
-        // 0b10_001_110 => self.add_a(bus, Operand::Indexed(index), true),
-
-        // 0b10_010_110 => self.sub_a(bus, Operand::Indexed(index), false, true),
-        // 0b10_011_110 => self.sub_a(bus, Operand::Indexed(index), true, true),
-
-        // 0b10_100_110 => self.and_a(bus, Operand::Indexed(index)),
-        // 0b10_101_110 => self.xor_a(bus, Operand::Indexed(index)),
-        // 0b10_110_110 => self.or_a(bus, Operand::Indexed(index)),
-        // 0b10_111_110 => self.sub_a(bus, Operand::Indexed(index), false, false),
-
-        // 0b11_100_001 => self.pop(bus, Operand::Direct(index.into())),
-        // 0b11_100_101 => self.push(bus, Operand::Direct(index.into())),
-
-        // 0b11_001_011 => self.index_bits(bus, index),
         _ => format!("index\t{}, ${:02x}", reg, opcodes[0]),
+    }
+}
+
+fn index_bits(opcodes: &[u8], reg: &str) -> String {
+    match opcodes[1] {
+        0b00_000_110 => format!("rlc\t({}+{})", reg, opcodes[0]),
+        0b00_001_110 => format!("rrc\t({}+{})", reg, opcodes[0]),
+        0b00_010_110 => format!("rl\t({}+{})", reg, opcodes[0]),
+        0b00_011_110 => format!("rr\t({}+{})", reg, opcodes[0]),
+        0b00_100_110 => format!("sla\t({}+{})", reg, opcodes[0]),
+        0b00_101_110 => format!("sra\t({}+{})", reg, opcodes[0]),
+        0b00_110_110 => format!("sll!\t({}+{})", reg, opcodes[0]),
+        0b00_111_110 => format!("srl\t({}+{})", reg, opcodes[0]),
+
+        0b01_000_110 => format!("bit\t0, ({}+{})", reg, opcodes[0]),
+        0b01_001_110 => format!("bit\t1, ({}+{})", reg, opcodes[0]),
+        0b01_010_110 => format!("bit\t2, ({}+{})", reg, opcodes[0]),
+        0b01_011_110 => format!("bit\t3, ({}+{})", reg, opcodes[0]),
+        0b01_100_110 => format!("bit\t4, ({}+{})", reg, opcodes[0]),
+        0b01_101_110 => format!("bit\t5, ({}+{})", reg, opcodes[0]),
+        0b01_110_110 => format!("bit\t6, ({}+{})", reg, opcodes[0]),
+        0b01_111_110 => format!("bit\t7, ({}+{})", reg, opcodes[0]),
+
+        0b10_000_110 => format!("res\t0,({}+{})", reg, opcodes[0]),
+        0b10_001_110 => format!("res\t1,({}+{})", reg, opcodes[0]),
+        0b10_010_110 => format!("res\t2,({}+{})", reg, opcodes[0]),
+        0b10_011_110 => format!("res\t3,({}+{})", reg, opcodes[0]),
+        0b10_100_110 => format!("res\t4,({}+{})", reg, opcodes[0]),
+        0b10_101_110 => format!("res\t5,({}+{})", reg, opcodes[0]),
+        0b10_110_110 => format!("res\t6,({}+{})", reg, opcodes[0]),
+        0b10_111_110 => format!("res\t7,({}+{})", reg, opcodes[0]),
+
+        0b11_000_110 => format!("set\t0, ({}+{})", reg, opcodes[0]),
+        0b11_001_110 => format!("set\t1, ({}+{})", reg, opcodes[0]),
+        0b11_010_110 => format!("set\t2, ({}+{})", reg, opcodes[0]),
+        0b11_011_110 => format!("set\t3, ({}+{})", reg, opcodes[0]),
+        0b11_100_110 => format!("set\t4, ({}+{})", reg, opcodes[0]),
+        0b11_101_110 => format!("set\t5, ({}+{})", reg, opcodes[0]),
+        0b11_110_110 => format!("set\t6, ({}+{})", reg, opcodes[0]),
+        0b11_111_110 => format!("set\t7, ({}+{})", reg, opcodes[0]),
+
+        _ => format!("index bits\t{}, ${:02x}", reg, opcodes[1]),
     }
 }

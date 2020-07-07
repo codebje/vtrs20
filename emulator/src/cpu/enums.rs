@@ -152,3 +152,29 @@ pub(super) enum Exchange {
     SP_IX,
     SP_IY,
 }
+
+/** Bit shifter operation.
+ *
+ * This selects between rotate and shift operations, including selecting carry or no-carry rotates, and logical or
+ * arithmetic shifts.
+ */
+#[derive(Debug, PartialEq)]
+pub(super) enum ShiftOp {
+    Rot,
+    RotC,
+    ShiftA,
+    ShiftL,
+}
+
+/**
+ * Rotate/shift mode.
+ *
+ * There are '8080' style rotates in the base instruction set that operate only on the A register. These do not affect
+ * the flags in the same was as the full Z80 rotation set in the 'bits' extended operand range. This enum allows a
+ * rotate function to distinguish the two modes.
+ */
+#[derive(Debug)]
+pub(super) enum ShiftMode {
+    R8080,
+    RZ80,
+}

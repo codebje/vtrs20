@@ -26,6 +26,61 @@ mod mmu;
 
 pub use enums::*;
 
+trait CheckFlags {
+    fn sign(&self) -> u8;
+    fn zero(&self) -> u8;
+    fn parity(&self) -> u8;
+}
+
+impl CheckFlags for u8 {
+    #[inline(always)]
+    fn sign(&self) -> u8 {
+        *self & 0b1000_0000
+    }
+
+    #[inline(always)]
+    fn zero(&self) -> u8 {
+        if *self == 0 {
+            0b0100_0000
+        } else {
+            0
+        }
+    }
+
+    #[inline(always)]
+    fn parity(&self) -> u8 {
+        ((!self.count_ones() & 1) << 2) as u8
+    }
+}
+
+impl CheckFlags for u16 {
+    #[inline(always)]
+    fn sign(&self) -> u8 {
+        (*self & 0b1000_0000) as u8
+    }
+
+    #[inline(always)]
+    fn zero(&self) -> u8 {
+        if (*self & 0xff) == 0 {
+            0b0100_0000
+        } else {
+            0
+        }
+    }
+
+    #[inline(always)]
+    fn parity(&self) -> u8 {
+        ((!(*self as u8).count_ones() & 1) << 2) as u8
+    }
+}
+
+#[test]
+fn test_flags() {
+    let val: u16 = 0x78;
+
+    assert_eq!(val.parity(), Flags::PF.bits(), "parity is SET for even number of bits");
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Mode {
     Reset,
@@ -193,6 +248,11 @@ impl CPU {
     fn error(&mut self, cause: &str) {
         self.mode = Mode::Halt;
         println!("Illegal instruction (PC=${:04x}). Halt. {}", self.sr.pc, cause);
+    }
+
+    // print a warning
+    fn warn(&self, cause: &str) {
+        println!("Warning: {} (PC=${:04x})", cause, self.sr.pc);
     }
 
     // Load an operand using an addressing mode.

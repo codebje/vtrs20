@@ -32,25 +32,25 @@ impl CPU {
     }
 
     pub(super) fn cpd(&mut self, bus: &mut Bus, repeating: bool) {
-        let hl = Wrapping(self.load_operand(bus, Operand::Indirect(RegIndirect::HL)) as u8);
-        let r = (Wrapping(self.gr.a) - hl).0;
+        let cf = self.gr.f & 1;
 
-        self.gr.f &= Flags::CF.bits(); // preserve CF
-        self.gr.f |= Flags::NF.bits(); // set NF
-        self.gr.f |= if (r & 0x80) != 0 { Flags::SF.bits() } else { 0 }; // check SF
-        self.gr.f |= if r == 0 { Flags::ZF.bits() } else { 0 }; // check ZF
-        self.gr.f |= (r ^ hl.0 ^ self.gr.a) & Flags::HF.bits();
+        // Perform A-(HL), discarding the result value. Flags are updated.
+        self.sub_a(bus, Operand::Indirect(RegIndirect::HL), false, false);
 
-        if self.gr.bc != 1 {
-            self.gr.f |= 0b0000_0100;
-        }
+        // Restore the preserved carry flag, reset parity/overlow flag
+        self.gr.f = (self.gr.f & 0b1101_0010) | cf;
 
         // decrement hl, bc
         self.gr.hl = (Wrapping(self.gr.hl) - Wrapping(1)).0;
         self.gr.bc = (Wrapping(self.gr.bc) - Wrapping(1)).0;
 
+        // set PF if BC is not zero
+        if self.gr.bc != 0 {
+            self.gr.f |= Flags::PF.bits();
+        }
+
         // if bc not zero and a != (hl), CPDR will decrement PC
-        if repeating && self.gr.bc != 0 && hl.0 != self.gr.a {
+        if repeating && self.gr.bc != 0 && (self.gr.f & Flags::ZF.bits()) == 0 {
             self.sr.pc -= 2;
         }
     }

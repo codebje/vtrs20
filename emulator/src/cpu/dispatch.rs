@@ -19,7 +19,7 @@ impl CPU {
             0b00_000_100 => self.inc(bus, Operand::Direct(Register::B)),
             0b00_000_101 => self.dec(bus, Operand::Direct(Register::B)),
             0b00_000_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::B)),
-            0b00_000_111 => self.rot_left(bus, Operand::Direct(Register::A), true),
+            0b00_000_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::RotC, ShiftMode::R8080),
 
             0b00_001_000 => self.exchange(bus, Exchange::AF_AFs),
             0b00_001_001 => self.add16(Register::HL, Register::BC, false),
@@ -28,7 +28,7 @@ impl CPU {
             0b00_001_100 => self.inc(bus, Operand::Direct(Register::C)),
             0b00_001_101 => self.dec(bus, Operand::Direct(Register::C)),
             0b00_001_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::C)),
-            0b00_001_111 => self.rot_right(bus, Operand::Direct(Register::A), true),
+            0b00_001_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::RotC, ShiftMode::R8080),
 
             0b00_010_000 => self.error(&errstr),
             0b00_010_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::DE)),
@@ -37,7 +37,7 @@ impl CPU {
             0b00_010_100 => self.inc(bus, Operand::Direct(Register::D)),
             0b00_010_101 => self.dec(bus, Operand::Direct(Register::D)),
             0b00_010_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::D)),
-            0b00_010_111 => self.rot_left(bus, Operand::Direct(Register::A), false),
+            0b00_010_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::Rot, ShiftMode::R8080),
 
             0b00_011_000 => self.error(&errstr),
             0b00_011_001 => self.add16(Register::HL, Register::DE, false),
@@ -46,7 +46,7 @@ impl CPU {
             0b00_011_100 => self.inc(bus, Operand::Direct(Register::E)),
             0b00_011_101 => self.dec(bus, Operand::Direct(Register::E)),
             0b00_011_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::E)),
-            0b00_011_111 => self.error(&errstr),
+            0b00_011_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::Rot, ShiftMode::R8080),
 
             0b00_100_000 => self.error(&errstr),
             0b00_100_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::HL)),
@@ -55,7 +55,7 @@ impl CPU {
             0b00_100_100 => self.inc(bus, Operand::Direct(Register::H)),
             0b00_100_101 => self.dec(bus, Operand::Direct(Register::H)),
             0b00_100_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::H)),
-            0b00_100_111 => self.error(&errstr),
+            0b00_100_111 => self.daa(),
 
             0b00_101_000 => self.error(&errstr),
             0b00_101_001 => self.add16(Register::HL, Register::HL, false),
@@ -64,7 +64,7 @@ impl CPU {
             0b00_101_100 => self.inc(bus, Operand::Direct(Register::L)),
             0b00_101_101 => self.dec(bus, Operand::Direct(Register::L)),
             0b00_101_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::L)),
-            0b00_101_111 => self.error(&errstr),
+            0b00_101_111 => self.cpl(),
 
             0b00_110_000 => self.error(&errstr),
             0b00_110_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::SP)),
@@ -73,7 +73,7 @@ impl CPU {
             0b00_110_100 => self.inc(bus, Operand::Indirect(RegIndirect::HL)),
             0b00_110_101 => self.dec(bus, Operand::Indirect(RegIndirect::HL)),
             0b00_110_110 => self.ld_8(bus, Operand::Immediate(), Operand::Indirect(RegIndirect::HL)),
-            0b00_110_111 => self.error(&errstr),
+            0b00_110_111 => self.scf(),
 
             0b00_111_000 => self.error(&errstr),
             0b00_111_001 => self.add16(Register::HL, Register::SP, false),
@@ -82,7 +82,7 @@ impl CPU {
             0b00_111_100 => self.inc(bus, Operand::Direct(Register::A)),
             0b00_111_101 => self.dec(bus, Operand::Direct(Register::A)),
             0b00_111_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::A)),
-            0b00_111_111 => self.error(&errstr),
+            0b00_111_111 => self.ccf(),
 
             0b01_000_000 => self.ld_8(bus, Operand::Direct(Register::B), Operand::Direct(Register::B)),
             0b01_000_001 => self.ld_8(bus, Operand::Direct(Register::C), Operand::Direct(Register::B)),
@@ -319,6 +319,8 @@ impl CPU {
             0b00_101_001 => self.out0(bus, Operand::Direct(Register::L), Operand::Immediate()),
             0b00_111_001 => self.out0(bus, Operand::Direct(Register::A), Operand::Immediate()),
 
+            0b01_000_100 => self.neg(),
+
             0b01_000_010 => self.sub_hl_ww(RegW::BC, true),
             0b01_010_010 => self.sub_hl_ww(RegW::DE, true),
             0b01_100_010 => self.sub_hl_ww(RegW::HL, true),
@@ -340,6 +342,9 @@ impl CPU {
             0b10_100_000 => self.ldi(bus, false),
             0b10_110_000 => self.ldi(bus, true),
 
+            0b01_100_111 => self.rrd(bus),
+            0b01_101_111 => self.rld(bus),
+
             // Block transfers
             0b10_101_000 => self.ldd(bus, false),
             0b10_111_000 => self.ldd(bus, true),
@@ -354,48 +359,87 @@ impl CPU {
     fn bits(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
         self.sr.pc += 1;
-        let errstr = format!("Bbitops opcode {:02x}", opcode);
 
         match opcode {
             // RLC g/(HL)
-            0b00_000_000 => self.rot_left(bus, Operand::Direct(Register::B), true),
-            0b00_000_001 => self.rot_left(bus, Operand::Direct(Register::C), true),
-            0b00_000_010 => self.rot_left(bus, Operand::Direct(Register::D), true),
-            0b00_000_011 => self.rot_left(bus, Operand::Direct(Register::E), true),
-            0b00_000_100 => self.rot_left(bus, Operand::Direct(Register::H), true),
-            0b00_000_101 => self.rot_left(bus, Operand::Direct(Register::L), true),
-            0b00_000_110 => self.rot_left(bus, Operand::Indirect(RegIndirect::HL), true),
-            0b00_000_111 => self.rot_left(bus, Operand::Direct(Register::A), true),
+            0b00_000_000 => self.rot_left(bus, Operand::Direct(Register::B), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_001 => self.rot_left(bus, Operand::Direct(Register::C), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_010 => self.rot_left(bus, Operand::Direct(Register::D), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_011 => self.rot_left(bus, Operand::Direct(Register::E), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_100 => self.rot_left(bus, Operand::Direct(Register::H), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_101 => self.rot_left(bus, Operand::Direct(Register::L), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_110 => self.rot_left(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_000_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::RotC, ShiftMode::RZ80),
 
             // RRC g/(HL)
-            0b00_001_000 => self.rot_right(bus, Operand::Direct(Register::B), true),
-            0b00_001_001 => self.rot_right(bus, Operand::Direct(Register::C), true),
-            0b00_001_010 => self.rot_right(bus, Operand::Direct(Register::D), true),
-            0b00_001_011 => self.rot_right(bus, Operand::Direct(Register::E), true),
-            0b00_001_100 => self.rot_right(bus, Operand::Direct(Register::H), true),
-            0b00_001_101 => self.rot_right(bus, Operand::Direct(Register::L), true),
-            0b00_001_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), true),
-            0b00_001_111 => self.rot_right(bus, Operand::Direct(Register::A), true),
+            0b00_001_000 => self.rot_right(bus, Operand::Direct(Register::B), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_001 => self.rot_right(bus, Operand::Direct(Register::C), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_010 => self.rot_right(bus, Operand::Direct(Register::D), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_011 => self.rot_right(bus, Operand::Direct(Register::E), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_100 => self.rot_right(bus, Operand::Direct(Register::H), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_101 => self.rot_right(bus, Operand::Direct(Register::L), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::RotC, ShiftMode::RZ80),
 
             // RL g/(HL)
-            0b00_010_000 => self.rot_left(bus, Operand::Direct(Register::B), false),
-            0b00_010_001 => self.rot_left(bus, Operand::Direct(Register::C), false),
-            0b00_010_010 => self.rot_left(bus, Operand::Direct(Register::D), false),
-            0b00_010_011 => self.rot_left(bus, Operand::Direct(Register::E), false),
-            0b00_010_100 => self.rot_left(bus, Operand::Direct(Register::H), false),
-            0b00_010_101 => self.rot_left(bus, Operand::Direct(Register::L), false),
-            0b00_010_110 => self.rot_left(bus, Operand::Indirect(RegIndirect::HL), false),
-            0b00_010_111 => self.rot_left(bus, Operand::Direct(Register::A), false),
+            0b00_010_000 => self.rot_left(bus, Operand::Direct(Register::B), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_001 => self.rot_left(bus, Operand::Direct(Register::C), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_010 => self.rot_left(bus, Operand::Direct(Register::D), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_011 => self.rot_left(bus, Operand::Direct(Register::E), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_100 => self.rot_left(bus, Operand::Direct(Register::H), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_101 => self.rot_left(bus, Operand::Direct(Register::L), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_110 => self.rot_left(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_010_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::Rot, ShiftMode::RZ80),
 
             // RR g/(HL)
-            0b00_011_000 => self.rot_right(bus, Operand::Direct(Register::B), false),
-            0b00_011_001 => self.rot_right(bus, Operand::Direct(Register::C), false),
-            0b00_011_010 => self.rot_right(bus, Operand::Direct(Register::D), false),
-            0b00_011_011 => self.rot_right(bus, Operand::Direct(Register::E), false),
-            0b00_011_100 => self.rot_right(bus, Operand::Direct(Register::H), false),
-            0b00_011_101 => self.rot_right(bus, Operand::Direct(Register::L), false),
-            0b00_011_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), false),
-            0b00_011_111 => self.rot_right(bus, Operand::Direct(Register::A), false),
+            0b00_011_000 => self.rot_right(bus, Operand::Direct(Register::B), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_001 => self.rot_right(bus, Operand::Direct(Register::C), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_010 => self.rot_right(bus, Operand::Direct(Register::D), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_011 => self.rot_right(bus, Operand::Direct(Register::E), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_100 => self.rot_right(bus, Operand::Direct(Register::H), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_101 => self.rot_right(bus, Operand::Direct(Register::L), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::Rot, ShiftMode::RZ80),
+
+            // SLA g/(HL)
+            0b00_100_000 => self.rot_left(bus, Operand::Direct(Register::B), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_001 => self.rot_left(bus, Operand::Direct(Register::C), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_010 => self.rot_left(bus, Operand::Direct(Register::D), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_011 => self.rot_left(bus, Operand::Direct(Register::E), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_100 => self.rot_left(bus, Operand::Direct(Register::H), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_101 => self.rot_left(bus, Operand::Direct(Register::L), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_110 => self.rot_left(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_100_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::ShiftA, ShiftMode::RZ80),
+
+            // SRA g/(HL)
+            0b00_101_000 => self.rot_right(bus, Operand::Direct(Register::B), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_001 => self.rot_right(bus, Operand::Direct(Register::C), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_010 => self.rot_right(bus, Operand::Direct(Register::D), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_011 => self.rot_right(bus, Operand::Direct(Register::E), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_100 => self.rot_right(bus, Operand::Direct(Register::H), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_101 => self.rot_right(bus, Operand::Direct(Register::L), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::ShiftA, ShiftMode::RZ80),
+
+            // SLL g/(HL) - Illegal instructions. Included only to allow zex"doc" to pass the shifter test.
+            0b00_110_000 => self.rot_left(bus, Operand::Direct(Register::B), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_001 => self.rot_left(bus, Operand::Direct(Register::C), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_010 => self.rot_left(bus, Operand::Direct(Register::D), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_011 => self.rot_left(bus, Operand::Direct(Register::E), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_100 => self.rot_left(bus, Operand::Direct(Register::H), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_101 => self.rot_left(bus, Operand::Direct(Register::L), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_110 => self.rot_left(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_110_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::ShiftL, ShiftMode::RZ80),
+
+            // SRL g/(HL)
+            0b00_111_000 => self.rot_right(bus, Operand::Direct(Register::B), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_001 => self.rot_right(bus, Operand::Direct(Register::C), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_010 => self.rot_right(bus, Operand::Direct(Register::D), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_011 => self.rot_right(bus, Operand::Direct(Register::E), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_100 => self.rot_right(bus, Operand::Direct(Register::H), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_101 => self.rot_right(bus, Operand::Direct(Register::L), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_110 => self.rot_right(bus, Operand::Indirect(RegIndirect::HL), ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::ShiftL, ShiftMode::RZ80),
 
             // BIT 0, g
             0b01_000_000 => self.bit(bus, 0, Operand::Direct(Register::B)),
@@ -477,7 +521,166 @@ impl CPU {
             0b01_111_110 => self.bit(bus, 7, Operand::Indirect(RegIndirect::HL)),
             0b01_111_111 => self.bit(bus, 7, Operand::Direct(Register::A)),
 
-            _ => self.error(&errstr),
+            //
+            // RES 0, g
+            0b10_000_000 => self.res(bus, 0, Operand::Direct(Register::B)),
+            0b10_000_001 => self.res(bus, 0, Operand::Direct(Register::C)),
+            0b10_000_010 => self.res(bus, 0, Operand::Direct(Register::D)),
+            0b10_000_011 => self.res(bus, 0, Operand::Direct(Register::E)),
+            0b10_000_100 => self.res(bus, 0, Operand::Direct(Register::H)),
+            0b10_000_101 => self.res(bus, 0, Operand::Direct(Register::L)),
+            0b10_000_110 => self.res(bus, 0, Operand::Indirect(RegIndirect::HL)),
+            0b10_000_111 => self.res(bus, 0, Operand::Direct(Register::A)),
+
+            // RES 1, g
+            0b10_001_000 => self.res(bus, 1, Operand::Direct(Register::B)),
+            0b10_001_001 => self.res(bus, 1, Operand::Direct(Register::C)),
+            0b10_001_010 => self.res(bus, 1, Operand::Direct(Register::D)),
+            0b10_001_011 => self.res(bus, 1, Operand::Direct(Register::E)),
+            0b10_001_100 => self.res(bus, 1, Operand::Direct(Register::H)),
+            0b10_001_101 => self.res(bus, 1, Operand::Direct(Register::L)),
+            0b10_001_110 => self.res(bus, 1, Operand::Indirect(RegIndirect::HL)),
+            0b10_001_111 => self.res(bus, 1, Operand::Direct(Register::A)),
+
+            // RES 2, g
+            0b10_010_000 => self.res(bus, 2, Operand::Direct(Register::B)),
+            0b10_010_001 => self.res(bus, 2, Operand::Direct(Register::C)),
+            0b10_010_010 => self.res(bus, 2, Operand::Direct(Register::D)),
+            0b10_010_011 => self.res(bus, 2, Operand::Direct(Register::E)),
+            0b10_010_100 => self.res(bus, 2, Operand::Direct(Register::H)),
+            0b10_010_101 => self.res(bus, 2, Operand::Direct(Register::L)),
+            0b10_010_110 => self.res(bus, 2, Operand::Indirect(RegIndirect::HL)),
+            0b10_010_111 => self.res(bus, 2, Operand::Direct(Register::A)),
+
+            // RES 3, g
+            0b10_011_000 => self.res(bus, 3, Operand::Direct(Register::B)),
+            0b10_011_001 => self.res(bus, 3, Operand::Direct(Register::C)),
+            0b10_011_010 => self.res(bus, 3, Operand::Direct(Register::D)),
+            0b10_011_011 => self.res(bus, 3, Operand::Direct(Register::E)),
+            0b10_011_100 => self.res(bus, 3, Operand::Direct(Register::H)),
+            0b10_011_101 => self.res(bus, 3, Operand::Direct(Register::L)),
+            0b10_011_110 => self.res(bus, 3, Operand::Indirect(RegIndirect::HL)),
+            0b10_011_111 => self.res(bus, 3, Operand::Direct(Register::A)),
+
+            // RES 4, g
+            0b10_100_000 => self.res(bus, 4, Operand::Direct(Register::B)),
+            0b10_100_001 => self.res(bus, 4, Operand::Direct(Register::C)),
+            0b10_100_010 => self.res(bus, 4, Operand::Direct(Register::D)),
+            0b10_100_011 => self.res(bus, 4, Operand::Direct(Register::E)),
+            0b10_100_100 => self.res(bus, 4, Operand::Direct(Register::H)),
+            0b10_100_101 => self.res(bus, 4, Operand::Direct(Register::L)),
+            0b10_100_110 => self.res(bus, 4, Operand::Indirect(RegIndirect::HL)),
+            0b10_100_111 => self.res(bus, 4, Operand::Direct(Register::A)),
+
+            // RES 5, g
+            0b10_101_000 => self.res(bus, 5, Operand::Direct(Register::B)),
+            0b10_101_001 => self.res(bus, 5, Operand::Direct(Register::C)),
+            0b10_101_010 => self.res(bus, 5, Operand::Direct(Register::D)),
+            0b10_101_011 => self.res(bus, 5, Operand::Direct(Register::E)),
+            0b10_101_100 => self.res(bus, 5, Operand::Direct(Register::H)),
+            0b10_101_101 => self.res(bus, 5, Operand::Direct(Register::L)),
+            0b10_101_110 => self.res(bus, 5, Operand::Indirect(RegIndirect::HL)),
+            0b10_101_111 => self.res(bus, 5, Operand::Direct(Register::A)),
+
+            // RES 6, g
+            0b10_110_000 => self.res(bus, 6, Operand::Direct(Register::B)),
+            0b10_110_001 => self.res(bus, 6, Operand::Direct(Register::C)),
+            0b10_110_010 => self.res(bus, 6, Operand::Direct(Register::D)),
+            0b10_110_011 => self.res(bus, 6, Operand::Direct(Register::E)),
+            0b10_110_100 => self.res(bus, 6, Operand::Direct(Register::H)),
+            0b10_110_101 => self.res(bus, 6, Operand::Direct(Register::L)),
+            0b10_110_110 => self.res(bus, 6, Operand::Indirect(RegIndirect::HL)),
+            0b10_110_111 => self.res(bus, 6, Operand::Direct(Register::A)),
+
+            // RES 7, g
+            0b10_111_000 => self.res(bus, 7, Operand::Direct(Register::B)),
+            0b10_111_001 => self.res(bus, 7, Operand::Direct(Register::C)),
+            0b10_111_010 => self.res(bus, 7, Operand::Direct(Register::D)),
+            0b10_111_011 => self.res(bus, 7, Operand::Direct(Register::E)),
+            0b10_111_100 => self.res(bus, 7, Operand::Direct(Register::H)),
+            0b10_111_101 => self.res(bus, 7, Operand::Direct(Register::L)),
+            0b10_111_110 => self.res(bus, 7, Operand::Indirect(RegIndirect::HL)),
+            0b10_111_111 => self.res(bus, 7, Operand::Direct(Register::A)),
+
+            // SET 0, g
+            0b11_000_000 => self.set(bus, 0, Operand::Direct(Register::B)),
+            0b11_000_001 => self.set(bus, 0, Operand::Direct(Register::C)),
+            0b11_000_010 => self.set(bus, 0, Operand::Direct(Register::D)),
+            0b11_000_011 => self.set(bus, 0, Operand::Direct(Register::E)),
+            0b11_000_100 => self.set(bus, 0, Operand::Direct(Register::H)),
+            0b11_000_101 => self.set(bus, 0, Operand::Direct(Register::L)),
+            0b11_000_110 => self.set(bus, 0, Operand::Indirect(RegIndirect::HL)),
+            0b11_000_111 => self.set(bus, 0, Operand::Direct(Register::A)),
+
+            // SET 1, g
+            0b11_001_000 => self.set(bus, 1, Operand::Direct(Register::B)),
+            0b11_001_001 => self.set(bus, 1, Operand::Direct(Register::C)),
+            0b11_001_010 => self.set(bus, 1, Operand::Direct(Register::D)),
+            0b11_001_011 => self.set(bus, 1, Operand::Direct(Register::E)),
+            0b11_001_100 => self.set(bus, 1, Operand::Direct(Register::H)),
+            0b11_001_101 => self.set(bus, 1, Operand::Direct(Register::L)),
+            0b11_001_110 => self.set(bus, 1, Operand::Indirect(RegIndirect::HL)),
+            0b11_001_111 => self.set(bus, 1, Operand::Direct(Register::A)),
+
+            // SET 2, g
+            0b11_010_000 => self.set(bus, 2, Operand::Direct(Register::B)),
+            0b11_010_001 => self.set(bus, 2, Operand::Direct(Register::C)),
+            0b11_010_010 => self.set(bus, 2, Operand::Direct(Register::D)),
+            0b11_010_011 => self.set(bus, 2, Operand::Direct(Register::E)),
+            0b11_010_100 => self.set(bus, 2, Operand::Direct(Register::H)),
+            0b11_010_101 => self.set(bus, 2, Operand::Direct(Register::L)),
+            0b11_010_110 => self.set(bus, 2, Operand::Indirect(RegIndirect::HL)),
+            0b11_010_111 => self.set(bus, 2, Operand::Direct(Register::A)),
+
+            // SET 3, g
+            0b11_011_000 => self.set(bus, 3, Operand::Direct(Register::B)),
+            0b11_011_001 => self.set(bus, 3, Operand::Direct(Register::C)),
+            0b11_011_010 => self.set(bus, 3, Operand::Direct(Register::D)),
+            0b11_011_011 => self.set(bus, 3, Operand::Direct(Register::E)),
+            0b11_011_100 => self.set(bus, 3, Operand::Direct(Register::H)),
+            0b11_011_101 => self.set(bus, 3, Operand::Direct(Register::L)),
+            0b11_011_110 => self.set(bus, 3, Operand::Indirect(RegIndirect::HL)),
+            0b11_011_111 => self.set(bus, 3, Operand::Direct(Register::A)),
+
+            // SET 4, g
+            0b11_100_000 => self.set(bus, 4, Operand::Direct(Register::B)),
+            0b11_100_001 => self.set(bus, 4, Operand::Direct(Register::C)),
+            0b11_100_010 => self.set(bus, 4, Operand::Direct(Register::D)),
+            0b11_100_011 => self.set(bus, 4, Operand::Direct(Register::E)),
+            0b11_100_100 => self.set(bus, 4, Operand::Direct(Register::H)),
+            0b11_100_101 => self.set(bus, 4, Operand::Direct(Register::L)),
+            0b11_100_110 => self.set(bus, 4, Operand::Indirect(RegIndirect::HL)),
+            0b11_100_111 => self.set(bus, 4, Operand::Direct(Register::A)),
+
+            // SET 5, g
+            0b11_101_000 => self.set(bus, 5, Operand::Direct(Register::B)),
+            0b11_101_001 => self.set(bus, 5, Operand::Direct(Register::C)),
+            0b11_101_010 => self.set(bus, 5, Operand::Direct(Register::D)),
+            0b11_101_011 => self.set(bus, 5, Operand::Direct(Register::E)),
+            0b11_101_100 => self.set(bus, 5, Operand::Direct(Register::H)),
+            0b11_101_101 => self.set(bus, 5, Operand::Direct(Register::L)),
+            0b11_101_110 => self.set(bus, 5, Operand::Indirect(RegIndirect::HL)),
+            0b11_101_111 => self.set(bus, 5, Operand::Direct(Register::A)),
+
+            // SET 6, g
+            0b11_110_000 => self.set(bus, 6, Operand::Direct(Register::B)),
+            0b11_110_001 => self.set(bus, 6, Operand::Direct(Register::C)),
+            0b11_110_010 => self.set(bus, 6, Operand::Direct(Register::D)),
+            0b11_110_011 => self.set(bus, 6, Operand::Direct(Register::E)),
+            0b11_110_100 => self.set(bus, 6, Operand::Direct(Register::H)),
+            0b11_110_101 => self.set(bus, 6, Operand::Direct(Register::L)),
+            0b11_110_110 => self.set(bus, 6, Operand::Indirect(RegIndirect::HL)),
+            0b11_110_111 => self.set(bus, 6, Operand::Direct(Register::A)),
+
+            // SET 7, g
+            0b11_111_000 => self.set(bus, 7, Operand::Direct(Register::B)),
+            0b11_111_001 => self.set(bus, 7, Operand::Direct(Register::C)),
+            0b11_111_010 => self.set(bus, 7, Operand::Direct(Register::D)),
+            0b11_111_011 => self.set(bus, 7, Operand::Direct(Register::E)),
+            0b11_111_100 => self.set(bus, 7, Operand::Direct(Register::H)),
+            0b11_111_101 => self.set(bus, 7, Operand::Direct(Register::L)),
+            0b11_111_110 => self.set(bus, 7, Operand::Indirect(RegIndirect::HL)),
+            0b11_111_111 => self.set(bus, 7, Operand::Direct(Register::A)),
         }
     }
 
@@ -564,7 +767,14 @@ impl CPU {
         let errstr = format!("Index {:?} bitops opcode {:02x}", index, opcode);
 
         match opcode {
-            0b00_000_110 => self.rot_right(bus, arg, false),
+            0b00_000_110 => self.rot_left(bus, arg, ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_001_110 => self.rot_right(bus, arg, ShiftOp::RotC, ShiftMode::RZ80),
+            0b00_010_110 => self.rot_left(bus, arg, ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_011_110 => self.rot_right(bus, arg, ShiftOp::Rot, ShiftMode::RZ80),
+            0b00_100_110 => self.rot_left(bus, arg, ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_101_110 => self.rot_right(bus, arg, ShiftOp::ShiftA, ShiftMode::RZ80),
+            0b00_110_110 => self.rot_left(bus, arg, ShiftOp::ShiftL, ShiftMode::RZ80),
+            0b00_111_110 => self.rot_right(bus, arg, ShiftOp::ShiftL, ShiftMode::RZ80),
 
             0b01_000_110 => self.bit(bus, 0, arg),
             0b01_001_110 => self.bit(bus, 1, arg),

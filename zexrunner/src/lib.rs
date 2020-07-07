@@ -10,7 +10,7 @@ use emulator::ram::RAM;
 use z80emu;
 use z80emu::Cpu;
 
-const TEST_DEBUG: bool = false;
+const TEST_DEBUG: bool = true;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[repr(C)]
@@ -364,8 +364,11 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
     cpu.write_reg(Register::IY, state.iy);
     cpu.write_reg(Register::PC, 0x113);
 
+    let mut instr = "foo".to_string();
+    let mut prestate = "bar".to_string();
+
     if TEST_DEBUG {
-        println!(
+        instr = format!(
             "## execute: {:02x} {:02x} {:02x} {:02x}      {}",
             (state.instruction >> 24) as u8,
             (state.instruction >> 16) as u8,
@@ -378,7 +381,7 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
                 (state.instruction >> 0) as u8,
             ]),
         );
-        println!("          PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}  (PC)={:08X}  crc={:08x}",
+        prestate = format!("          PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}  (PC)={:08X}  crc={:08x}",
         cpu.reg(Register::PC),
         cpu.reg(Register::SP),
         cpu.reg(Register::A),
@@ -463,7 +466,19 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
             }
         }
 
-        println!("_PC=0113  PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}  (PC)={:08X}  crc={:08x}",
+        if (cpu80.get_flags().bits() & mask) != cpu.reg(Register::F) as u8
+            || cpu80.get_acc() != cpu.reg(Register::A) as u8
+            || cpu80.get_reg16(z80emu::StkReg16::BC) != cpu.reg(Register::BC)
+            || cpu80.get_reg16(z80emu::StkReg16::DE) != cpu.reg(Register::DE)
+            || cpu80.get_reg16(z80emu::StkReg16::HL) != cpu.reg(Register::HL)
+            || cpu80.get_index16(z80emu::Prefix::Xdd) != cpu.reg(Register::IX)
+            || cpu80.get_index16(z80emu::Prefix::Yfd) != cpu.reg(Register::IY)
+            || cpu80.get_sp() != cpu.reg(Register::SP)
+            || bus80.mem[0x103] != ram.mem_read(0x103).unwrap_or(0)
+            || bus80.mem[0x104] != ram.mem_read(0x104).unwrap_or(0)
+        {
+            println!("{}\n{}", instr, prestate);
+            println!("_PC=0113  PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}  (PC)={:08X}  crc={:08x}",
             cpu.reg(Register::PC),
             cpu.reg(Register::SP),
             cpu.reg(Register::A),
@@ -477,17 +492,6 @@ pub fn zex_execute(state: &ZexState, mask: u8, crc: u32) -> u32 {
             ram.mem_read(0x104).unwrap_or(0),
             state.instruction,
             result);
-        if (cpu80.get_flags().bits() & mask) != cpu.reg(Register::F) as u8
-            || cpu80.get_acc() != cpu.reg(Register::A) as u8
-            || cpu80.get_reg16(z80emu::StkReg16::BC) != cpu.reg(Register::BC)
-            || cpu80.get_reg16(z80emu::StkReg16::DE) != cpu.reg(Register::DE)
-            || cpu80.get_reg16(z80emu::StkReg16::HL) != cpu.reg(Register::HL)
-            || cpu80.get_index16(z80emu::Prefix::Xdd) != cpu.reg(Register::IX)
-            || cpu80.get_index16(z80emu::Prefix::Yfd) != cpu.reg(Register::IY)
-            || cpu80.get_sp() != cpu.reg(Register::SP)
-            || bus80.mem[0x103] != ram.mem_read(0x103).unwrap_or(0)
-            || bus80.mem[0x104] != ram.mem_read(0x104).unwrap_or(0)
-        {
             println!("          PC={:04X}  SP={:04X}  A={:02X}  BC={:04X}  DE={:04X}  HL={:04X}  IX={:04X}  IY={:04X}  F={}  (103)={:02X} {:02X}",
                 cpu80.get_pc(),
                 cpu80.get_sp(),
