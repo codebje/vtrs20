@@ -18,11 +18,25 @@ impl CPU {
         }
     }
 
+    // JR j
+    pub(super) fn jr(&mut self, bus: &mut Bus, src: Operand, condition: Option<Condition>) {
+        let j = self.load_operand(bus, src);
+        if self.is_condition(condition) {
+            self.sr.pc = self.sr.pc + j + 2;
+        }
+    }
+
+    // djnz
+    pub(super) fn djnz(&mut self, bus: &mut Bus) {
+        let j = self.load_operand(bus, Operand::Immediate());
+        let b = (Wrapping(self.reg(Register::B)) - Wrapping(1)).0;
+        self.write_reg(Register::B, b);
+        if b != 0 {
+            self.sr.pc = self.sr.pc + j + 2;
+        }
+    }
+
     pub(super) fn call(&mut self, bus: &mut Bus, src: Operand, condition: Option<Condition>) {
-        // PCHr -> (SP-1)m
-        // PCLr -> (SP-2)m
-        // mn -> PCr
-        // SPr-2 -> SPr
         let dest = self.load_operand(bus, src);
         if self.is_condition(condition) {
             let sp = Wrapping(self.sr.sp);
@@ -41,6 +55,12 @@ impl CPU {
             self.sr.sp = (sp + Wrapping(2)).0;
             self.sr.pc = lo | hi << 8;
         }
+    }
+
+    // this looks a hecking lot like it can just jump anywhere, which it can.
+    // dispatch will invoke it only for specific vector addresses.
+    pub(super) fn rst(&mut self, vec: u16) {
+        self.sr.pc = vec;
     }
 
     pub(super) fn halt(&mut self) {

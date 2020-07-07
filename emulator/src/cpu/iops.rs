@@ -14,4 +14,22 @@ impl CPU {
         let data = self.load_operand(bus, src);
         bus.io_write(addr as u16, data as u8);
     }
+
+    // OUT (m), A
+    pub(super) fn out_m(&mut self, bus: &mut Bus, port: Operand) {
+        let addr = self.load_operand(bus, port) | (self.reg(Register::A) << 8);
+        bus.io_write(addr, self.gr.a);
+    }
+
+    // OUT (C), g
+    pub(super) fn out_c(&mut self, bus: &mut Bus, src: Operand) {
+        let data = self.load_operand(bus, src) as u8;
+        bus.io_write(self.gr.bc, data);
+    }
+
+    // IN (m), A
+    pub(super) fn in_m(&mut self, bus: &mut Bus, port: Operand) {
+        let addr = self.load_operand(bus, port) | (self.reg(Register::A) << 8);
+        self.gr.a = bus.io_read(addr);
+    }
 }

@@ -30,7 +30,7 @@ impl CPU {
             0b00_001_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::C)),
             0b00_001_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::RotC, ShiftMode::R8080),
 
-            0b00_010_000 => self.error(&errstr),
+            0b00_010_000 => self.djnz(bus),
             0b00_010_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::DE)),
             0b00_010_010 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Indirect(RegIndirect::DE)),
             0b00_010_011 => self.inc16(bus, Operand::Direct(Register::DE)),
@@ -39,7 +39,7 @@ impl CPU {
             0b00_010_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::D)),
             0b00_010_111 => self.rot_left(bus, Operand::Direct(Register::A), ShiftOp::Rot, ShiftMode::R8080),
 
-            0b00_011_000 => self.error(&errstr),
+            0b00_011_000 => self.jr(bus, Operand::Immediate(), None),
             0b00_011_001 => self.add16(Register::HL, Register::DE, false),
             0b00_011_010 => self.ld_8(bus, Operand::Indirect(RegIndirect::DE), Operand::Direct(Register::A)),
             0b00_011_011 => self.dec16(bus, Operand::Direct(Register::DE)),
@@ -48,7 +48,7 @@ impl CPU {
             0b00_011_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::E)),
             0b00_011_111 => self.rot_right(bus, Operand::Direct(Register::A), ShiftOp::Rot, ShiftMode::R8080),
 
-            0b00_100_000 => self.error(&errstr),
+            0b00_100_000 => self.jr(bus, Operand::Immediate(), Some(Condition::NonZero)),
             0b00_100_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::HL)),
             0b00_100_010 => self.ld_16(bus, Operand::Direct(Register::HL), Operand::Extended16()),
             0b00_100_011 => self.inc16(bus, Operand::Direct(Register::HL)),
@@ -57,7 +57,7 @@ impl CPU {
             0b00_100_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::H)),
             0b00_100_111 => self.daa(),
 
-            0b00_101_000 => self.error(&errstr),
+            0b00_101_000 => self.jr(bus, Operand::Immediate(), Some(Condition::Zero)),
             0b00_101_001 => self.add16(Register::HL, Register::HL, false),
             0b00_101_010 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::HL)),
             0b00_101_011 => self.dec16(bus, Operand::Direct(Register::HL)),
@@ -66,7 +66,7 @@ impl CPU {
             0b00_101_110 => self.ld_8(bus, Operand::Immediate(), Operand::Direct(Register::L)),
             0b00_101_111 => self.cpl(),
 
-            0b00_110_000 => self.error(&errstr),
+            0b00_110_000 => self.jr(bus, Operand::Immediate(), Some(Condition::NonCarry)),
             0b00_110_001 => self.ld_16(bus, Operand::Immediate16(), Operand::Direct(Register::SP)),
             0b00_110_010 => self.ld_16(bus, Operand::Direct(Register::A), Operand::Extended()),
             0b00_110_011 => self.inc16(bus, Operand::Direct(Register::SP)),
@@ -75,7 +75,7 @@ impl CPU {
             0b00_110_110 => self.ld_8(bus, Operand::Immediate(), Operand::Indirect(RegIndirect::HL)),
             0b00_110_111 => self.scf(),
 
-            0b00_111_000 => self.error(&errstr),
+            0b00_111_000 => self.jr(bus, Operand::Immediate(), Some(Condition::Carry)),
             0b00_111_001 => self.add16(Register::HL, Register::SP, false),
             0b00_111_010 => self.ld_8(bus, Operand::Extended(), Operand::Direct(Register::A)),
             0b00_111_011 => self.dec16(bus, Operand::Direct(Register::SP)),
@@ -236,7 +236,7 @@ impl CPU {
             0b11_000_100 => self.call(bus, Operand::Immediate16(), Some(Condition::NonZero)),
             0b11_000_101 => self.push(bus, Operand::Direct(Register::BC)),
             0b11_000_110 => self.add_a(bus, Operand::Immediate(), false),
-            0b11_000_111 => self.error(&errstr),
+            0b11_000_111 => self.rst(0x00),
 
             0b11_001_000 => self.ret(bus, Some(Condition::Zero)),
             0b11_001_001 => self.ret(bus, None),
@@ -245,25 +245,25 @@ impl CPU {
             0b11_001_100 => self.call(bus, Operand::Immediate16(), Some(Condition::Zero)),
             0b11_001_101 => self.call(bus, Operand::Immediate16(), None),
             0b11_001_110 => self.add_a(bus, Operand::Immediate(), true),
-            0b11_001_111 => self.error(&errstr),
+            0b11_001_111 => self.rst(0x08),
 
             0b11_010_000 => self.ret(bus, Some(Condition::NonCarry)),
             0b11_010_001 => self.pop(bus, Operand::Direct(Register::DE)),
             0b11_010_010 => self.jp(bus, Operand::Immediate16(), Some(Condition::NonCarry)),
-            0b11_010_011 => self.error(&errstr),
+            0b11_010_011 => self.out_m(bus, Operand::Immediate()),
             0b11_010_100 => self.call(bus, Operand::Immediate16(), Some(Condition::NonCarry)),
             0b11_010_101 => self.push(bus, Operand::Direct(Register::DE)),
             0b11_010_110 => self.sub_a(bus, Operand::Immediate(), false, true),
-            0b11_010_111 => self.error(&errstr),
+            0b11_010_111 => self.rst(0x10),
 
             0b11_011_000 => self.ret(bus, Some(Condition::Carry)),
             0b11_011_001 => self.exchange(bus, Exchange::X),
             0b11_011_010 => self.jp(bus, Operand::Immediate16(), Some(Condition::Carry)),
-            0b11_011_011 => self.error(&errstr),
+            0b11_011_011 => self.in_m(bus, Operand::Immediate()),
             0b11_011_100 => self.call(bus, Operand::Immediate16(), Some(Condition::Carry)),
             0b11_011_101 => self.index(bus, RegIndex::IX),
             0b11_011_110 => self.sub_a(bus, Operand::Immediate(), true, true),
-            0b11_011_111 => self.error(&errstr),
+            0b11_011_111 => self.rst(0x18),
 
             0b11_100_000 => self.ret(bus, Some(Condition::ParityOdd)),
             0b11_100_001 => self.pop(bus, Operand::Direct(Register::HL)),
@@ -272,16 +272,16 @@ impl CPU {
             0b11_100_100 => self.call(bus, Operand::Immediate16(), Some(Condition::ParityOdd)),
             0b11_100_101 => self.push(bus, Operand::Direct(Register::HL)),
             0b11_100_110 => self.and_a(bus, Operand::Immediate()),
-            0b11_100_111 => self.error(&errstr),
+            0b11_100_111 => self.rst(0x20),
 
             0b11_101_000 => self.ret(bus, Some(Condition::ParityEven)),
-            0b11_101_001 => self.error(&errstr),
+            0b11_101_001 => self.jp(bus, Operand::Direct(Register::HL), None),
             0b11_101_010 => self.jp(bus, Operand::Immediate16(), Some(Condition::ParityEven)),
             0b11_101_011 => self.exchange(bus, Exchange::DE_HL),
             0b11_101_100 => self.call(bus, Operand::Immediate16(), Some(Condition::ParityEven)),
             0b11_101_101 => self.extended(bus),
             0b11_101_110 => self.xor_a(bus, Operand::Immediate()),
-            0b11_101_111 => self.error(&errstr),
+            0b11_101_111 => self.rst(0x28),
 
             0b11_110_000 => self.ret(bus, Some(Condition::SignPlus)),
             0b11_110_001 => self.pop(bus, Operand::Direct(Register::AF)),
@@ -290,7 +290,7 @@ impl CPU {
             0b11_110_100 => self.call(bus, Operand::Immediate16(), Some(Condition::SignPlus)),
             0b11_110_101 => self.push(bus, Operand::Direct(Register::AF)),
             0b11_110_110 => self.or_a(bus, Operand::Immediate()),
-            0b11_110_111 => self.error(&errstr),
+            0b11_110_111 => self.rst(0x30),
 
             0b11_111_000 => self.ret(bus, Some(Condition::SignMinus)),
             0b11_111_001 => self.ld_16(bus, Operand::Direct(Register::HL), Operand::Direct(Register::SP)),
@@ -299,7 +299,7 @@ impl CPU {
             0b11_111_100 => self.call(bus, Operand::Immediate16(), Some(Condition::SignMinus)),
             0b11_111_101 => self.index(bus, RegIndex::IY),
             0b11_111_110 => self.sub_a(bus, Operand::Immediate(), false, false),
-            0b11_111_111 => self.error(&errstr),
+            0b11_111_111 => self.rst(0x38),
         }
     }
 
@@ -752,6 +752,8 @@ impl CPU {
 
             0b11_100_001 => self.pop(bus, Operand::Direct(index.into())),
             0b11_100_101 => self.push(bus, Operand::Direct(index.into())),
+
+            0b11_101_001 => self.jp(bus, Operand::Direct(index.into()), None),
 
             0b11_001_011 => self.index_bits(bus, index),
 
