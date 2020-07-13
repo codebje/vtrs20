@@ -107,6 +107,12 @@ impl CPU {
         self.gr.a = result as u8;
     }
 
+    pub(super) fn tst_a(&mut self, bus: &mut Bus, operand: Operand) {
+        let data = self.load_operand(bus, operand);
+        let result = self.reg(Register::A) & data;
+        self.gr.f = CPU::and_flags(result);
+    }
+
     pub(super) fn or_a(&mut self, bus: &mut Bus, operand: Operand) {
         let data = self.load_operand(bus, operand);
         let result = self.reg(Register::A) | data;

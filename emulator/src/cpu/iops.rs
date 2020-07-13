@@ -8,6 +8,13 @@ use crate::cpu::*;
  */
 
 impl CPU {
+    // IN0 (m), g
+    pub(super) fn in0(&mut self, bus: &mut Bus, src: Operand, dst: Operand) {
+        let addr = self.load_operand(bus, dst);
+        let data = bus.io_read(addr as u16);
+        self.store_operand(bus, src, data as u16);
+    }
+
     // OUT0 (m), g
     pub(super) fn out0(&mut self, bus: &mut Bus, src: Operand, dst: Operand) {
         let addr = self.load_operand(bus, dst);
@@ -22,10 +29,10 @@ impl CPU {
     }
 
     // OUT (C), g
-    pub(super) fn out_c(&mut self, bus: &mut Bus, src: Operand) {
+    /*pub(super) fn out_c(&mut self, bus: &mut Bus, src: Operand) {
         let data = self.load_operand(bus, src) as u8;
         bus.io_write(self.gr.bc, data);
-    }
+    }*/
 
     // IN (m), A
     pub(super) fn in_m(&mut self, bus: &mut Bus, port: Operand) {

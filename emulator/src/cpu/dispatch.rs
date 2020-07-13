@@ -6,7 +6,6 @@ impl CPU {
     pub(super) fn dispatch(&mut self, bus: &mut Bus) {
         let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
         self.sr.pc += 1;
-        let errstr = format!("Base opcode {:02x}", opcode);
 
         // The full 256 opcode values are listed explicitly to allow a jump table to be
         // generated. It would be possible to use bitmasks to reduce the size of this list,
@@ -311,6 +310,14 @@ impl CPU {
         let errstr = format!("Extended opcode {:02x}", opcode);
 
         match opcode {
+            0b00_000_000 => self.in0(bus, Operand::Direct(Register::B), Operand::Immediate()),
+            0b00_001_000 => self.in0(bus, Operand::Direct(Register::C), Operand::Immediate()),
+            0b00_010_000 => self.in0(bus, Operand::Direct(Register::D), Operand::Immediate()),
+            0b00_011_000 => self.in0(bus, Operand::Direct(Register::E), Operand::Immediate()),
+            0b00_100_000 => self.in0(bus, Operand::Direct(Register::H), Operand::Immediate()),
+            0b00_101_000 => self.in0(bus, Operand::Direct(Register::L), Operand::Immediate()),
+            0b00_111_000 => self.in0(bus, Operand::Direct(Register::A), Operand::Immediate()),
+
             0b00_000_001 => self.out0(bus, Operand::Direct(Register::B), Operand::Immediate()),
             0b00_001_001 => self.out0(bus, Operand::Direct(Register::C), Operand::Immediate()),
             0b00_010_001 => self.out0(bus, Operand::Direct(Register::D), Operand::Immediate()),
@@ -319,7 +326,20 @@ impl CPU {
             0b00_101_001 => self.out0(bus, Operand::Direct(Register::L), Operand::Immediate()),
             0b00_111_001 => self.out0(bus, Operand::Direct(Register::A), Operand::Immediate()),
 
+            0b00_000_100 => self.tst_a(bus, Operand::Direct(Register::B)),
+            0b00_001_100 => self.tst_a(bus, Operand::Direct(Register::C)),
+            0b00_010_100 => self.tst_a(bus, Operand::Direct(Register::D)),
+            0b00_011_100 => self.tst_a(bus, Operand::Direct(Register::E)),
+            0b00_100_100 => self.tst_a(bus, Operand::Direct(Register::H)),
+            0b00_101_100 => self.tst_a(bus, Operand::Direct(Register::L)),
+            0b00_110_100 => self.tst_a(bus, Operand::Indirect(RegIndirect::HL)),
+            0b00_111_100 => self.tst_a(bus, Operand::Direct(Register::A)),
+            0b01_100_100 => self.tst_a(bus, Operand::Immediate()),
+
             0b01_000_100 => self.neg(),
+
+            0b01_000_111 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Direct(Register::I)),
+            0b01_001_111 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Direct(Register::R)),
 
             0b01_000_010 => self.sub_hl_ww(RegW::BC, true),
             0b01_010_010 => self.sub_hl_ww(RegW::DE, true),

@@ -44,11 +44,7 @@ impl Peripheral for ROM {
         None
     }
 
-    #[allow(unused_variables)]
-    fn mem_write(&self, address: u32, data: u8) {
+    fn mem_write(&self, _address: u32, _data: u8) {
         // TODO SST39xF0x0 Flash command sequences for write control
-        //if address >= self.start && address <= self.start + self.size {
-        //self.bytes.borrow_mut()[(address - self.start) as usize] = data;
-        //}
     }
 }

@@ -1,3 +1,4 @@
+use std::num::Wrapping;
 use std::rc::Rc;
 
 use crate::bus::Bus;
@@ -81,20 +82,11 @@ fn test_flags() {
     assert_eq!(val.parity(), Flags::PF.bits(), "parity is SET for even number of bits");
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Mode {
     Reset,
     OpCodeFetch,
-    //IntAckNMI,
-    //IntAckINT0,
-    //IntAckOther,
-    //BusRelease,
     Halt,
-    //Sleep,
-    //DMARead,
-    //DMAWrite,
-    //IORead,
-    //IOWrite,
 }
 
 // General registers
@@ -236,10 +228,13 @@ impl CPU {
 
     // Run one machine cycle. This will assert various signals on the bus to do its job.
     pub fn cycle(&mut self, bus: &mut Bus) {
-        // check for: interrupt, DMA, ...?
+        bus.cycle();
         match self.mode {
             Mode::Reset => (),
-            Mode::OpCodeFetch => self.dispatch(bus),
+            Mode::OpCodeFetch => {
+                self.sr.r = (Wrapping(self.sr.r) + Wrapping(1)).0;
+                self.dispatch(bus);
+            }
             Mode::Halt => (),
         }
     }
@@ -253,6 +248,17 @@ impl CPU {
     // print a warning
     fn warn(&self, cause: &str) {
         println!("Warning: {} (PC=${:04x})", cause, self.sr.pc);
+    }
+
+    pub fn get_current_opcodes(&mut self, bus: &mut Bus, opcodes: &mut [u8; 4]) {
+        opcodes[0] = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        opcodes[1] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
+        opcodes[2] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 2));
+        opcodes[3] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 3));
+    }
+
+    pub fn get_cpu_mode(&self) -> Mode {
+        return self.mode;
     }
 
     // Load an operand using an addressing mode.

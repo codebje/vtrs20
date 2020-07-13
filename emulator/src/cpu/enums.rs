@@ -113,6 +113,7 @@ pub(super) enum Operand {
     Relative(),
 }
 
+#[derive(Debug)]
 pub(super) enum Condition {
     NonZero,
     Zero,

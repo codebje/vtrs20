@@ -293,6 +293,14 @@ pub fn disasm(opcodes: &[u8]) -> String {
 
 fn extended(opcodes: &[u8]) -> String {
     match opcodes[0] {
+        0b00_000_000 => format!("in0\t(${:02x}), b", opcodes[1]),
+        0b00_001_000 => format!("in0\t(${:02x}), c", opcodes[1]),
+        0b00_010_000 => format!("in0\t(${:02x}), d", opcodes[1]),
+        0b00_011_000 => format!("in0\t(${:02x}), e", opcodes[1]),
+        0b00_100_000 => format!("in0\t(${:02x}), h", opcodes[1]),
+        0b00_101_000 => format!("in0\t(${:02x}), l", opcodes[1]),
+        0b00_111_000 => format!("in0\t(${:02x}), a", opcodes[1]),
+
         0b00_000_001 => format!("out0\t(${:02x}), b", opcodes[1]),
         0b00_001_001 => format!("out0\t(${:02x}), c", opcodes[1]),
         0b00_010_001 => format!("out0\t(${:02x}), d", opcodes[1]),
@@ -300,6 +308,16 @@ fn extended(opcodes: &[u8]) -> String {
         0b00_100_001 => format!("out0\t(${:02x}), h", opcodes[1]),
         0b00_101_001 => format!("out0\t(${:02x}), l", opcodes[1]),
         0b00_111_001 => format!("out0\t(${:02x}), a", opcodes[1]),
+
+        0b00_000_100 => format!("tst\tb"),
+        0b00_001_100 => format!("tst\tc"),
+        0b00_010_100 => format!("tst\td"),
+        0b00_011_100 => format!("tst\te"),
+        0b00_100_100 => format!("tst\th"),
+        0b00_101_100 => format!("tst\tl"),
+        0b00_110_100 => format!("tst\t(hl)"),
+        0b00_111_100 => format!("tst\ta"),
+        0b01_100_100 => format!("tst\t{:08b}b", opcodes[1]),
 
         0b01_000_100 => "neg".to_string(),
 

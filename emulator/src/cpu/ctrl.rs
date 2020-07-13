@@ -20,9 +20,9 @@ impl CPU {
 
     // JR j
     pub(super) fn jr(&mut self, bus: &mut Bus, src: Operand, condition: Option<Condition>) {
-        let j = self.load_operand(bus, src);
+        let j = self.load_operand(bus, src) as i8;
         if self.is_condition(condition) {
-            self.sr.pc = self.sr.pc + j + 2;
+            self.sr.pc = (Wrapping(self.sr.pc) + Wrapping(j as u16)).0;
         }
     }
 

@@ -836,7 +836,7 @@ tlp3:	push	hl              ;                                       $1b7a
 ; b  = number of bytes
 ; hl = pointer to base case
 ; de = destination
-setup:	call	subyte
+setup:	call	subyte		;				$1ba4
 	inc	hl
 	dec	b
 	jp	nz,setup
@@ -856,7 +856,7 @@ subclp:	rrca
 	push	af
 	ld	a,0
 	call	c,nxtcbit	; get next counter bit if mask bit was set
-	xor	c		; flip bit if counter bit was set               $1be1
+	xor	c		; flip bit if counter bit was set 
 	rrca
 	ld	c,a
 	pop	af
@@ -888,10 +888,10 @@ substr:	pop	hl
 	ret
 
 ; get next counter bit in low bit of a
-cntbit:	ds	1
+cntbit:	ds	1		;				$1bf0
 cntbyt:	ds	2
 
-nxtcbit: push	bc
+nxtcbit: push	bc		;				$1bf3
 	push	hl
 	ld	hl,(cntbyt)
 	ld	b,(hl)
@@ -900,37 +900,37 @@ nxtcbit: push	bc
 	ld	c,a
 	rlca
 	ld	(hl),a
-	cp	a,1
-	jp	nz,ncb1
-	ld	hl,(cntbyt)
-	inc	hl
-	ld	(cntbyt),hl
-ncb1:	ld	a,b
-	and	c
-	pop	hl
-	pop	bc
-	ret	z
-	ld	a,1
-	ret
+	cp	a,1		;			$1c
+	jp	nz,ncb1		;			$1c02
+	ld	hl,(cntbyt)	;			$1c05
+	inc	hl		;			$1c08
+	ld	(cntbyt),hl	;			$1c09
+ncb1:	ld	a,b		;			$1c0c
+	and	c		;			$1c0d
+	pop	hl		;			$1c0e
+	pop	bc		;			$1c0f		
+	ret	z		;			$1c10
+	ld	a,1		;			$1c12
+	ret			;			$1c13
 	
 ; get next shifter bit in low bit of a
-shfbit:	ds	1
-shfbyt:	ds	2
+shfbit:	ds	1		;			$1c14
+shfbyt:	ds	2		;			$1c15
 
-nxtsbit: push	bc
-	push	hl
-	ld	hl,(shfbyt)
-	ld	b,(hl)
-	ld	hl,shfbit
-	ld	a,(hl)
-	ld	c,a
-	rlca
-	ld	(hl),a
-	cp	a,1
-	jp	nz,nsb1
-	ld	hl,(shfbyt)
-	inc	hl
-	ld	(shfbyt),hl
+nxtsbit: push	bc		;			$1c17
+	push	hl		;			$1c18
+	ld	hl,(shfbyt)	;			$1c19
+	ld	b,(hl)		;			$1c1c
+	ld	hl,shfbit	;			$1c1d
+	ld	a,(hl)		;			$1c20
+	ld	c,a		;			$1c21
+	rlca			;			$1c22
+	ld	(hl),a		;			$1c23
+	cp	a,1		;			$1c24
+	jp	nz,nsb1		;			$1c26
+	ld	hl,(shfbyt)	;			$1c29
+	inc	hl		;			$1c2c
+	ld	(shfbyt),hl	;			$1c2d
 nsb1:	ld	a,b
 	and	c
 	pop	hl
@@ -1285,7 +1285,7 @@ crclp:	ld	a,(de)
 	pop	af
 	ret
 
-initcrc:push	af
+initcrc:push	af		;			$1e73
 	push	bc
 	push	hl
 	ld	hl,crcval
