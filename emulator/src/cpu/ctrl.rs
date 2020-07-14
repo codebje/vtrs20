@@ -28,11 +28,11 @@ impl CPU {
 
     // djnz
     pub(super) fn djnz(&mut self, bus: &mut Bus) {
-        let j = self.load_operand(bus, Operand::Immediate());
+        let j = self.load_operand(bus, Operand::Immediate()) as i8;
         let b = (Wrapping(self.reg(Register::B)) - Wrapping(1)).0;
         self.write_reg(Register::B, b);
         if b != 0 {
-            self.sr.pc = self.sr.pc + j + 2;
+            self.sr.pc = (Wrapping(self.sr.pc) + Wrapping(j as u16)).0;
         }
     }
 

@@ -84,15 +84,12 @@ fn main() -> Result<(), std::io::Error> {
 
     cpu.reset();
 
-    let mut cycle = 0u64;
-
     loop {
         let mut instr = [0u8; 4];
         cpu.get_current_opcodes(&mut bus, &mut instr);
-        cycle += 1;
-        if cycle == 100000 {
+        let pc = cpu.reg(Register::PC);
+        if pc >= 0x0261 && pc <= 0x0292 {
             print_cpu(&cpu, &mut bus);
-            cycle = 0;
         }
         if cpu.mode != Mode::OpCodeFetch {
             break;

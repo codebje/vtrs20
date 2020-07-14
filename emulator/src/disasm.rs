@@ -321,8 +321,11 @@ fn extended(opcodes: &[u8]) -> String {
 
         0b01_000_100 => "neg".to_string(),
 
-        0b01_001_011 => format!("ld\tbc,(${:02x}{:02x})", opcodes[2], opcodes[1]),
-        0b01_011_011 => format!("ld\tde,(${:02x}{:02x})", opcodes[2], opcodes[1]),
+        0b00_101_011 => format!("ld\t(${:02x}{:02x}), bc", opcodes[2], opcodes[1]),
+        0b00_111_011 => format!("ld\t(${:02x}{:02x}), de", opcodes[2], opcodes[1]),
+
+        0b01_001_011 => format!("ld\tbc, (${:02x}{:02x})", opcodes[2], opcodes[1]),
+        0b01_011_011 => format!("ld\tde, (${:02x}{:02x})", opcodes[2], opcodes[1]),
 
         0b01_110_011 => format!("ld\t(${:02x}{:02x}), sp", opcodes[2], opcodes[1]),
         0b01_111_011 => format!("ld\tsp, (${:02x}{:02x})", opcodes[2], opcodes[1]),
