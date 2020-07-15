@@ -16,18 +16,14 @@ fn print_cpu(cpu: &CPU, bus: &mut Bus) {
         bus.mem_read(cpu.reg(Register::PC) as u32 + 1),
         bus.mem_read(cpu.reg(Register::PC) as u32 + 2),
         bus.mem_read(cpu.reg(Register::PC) as u32 + 3),
-        bus.mem_read(cpu.reg(Register::PC) as u32 + 4),
-        bus.mem_read(cpu.reg(Register::PC) as u32 + 5),
     ];
     let flags = cpu.reg(Register::F);
     println!(
-        "PC=${:04x}, opcode=${:02x} mem={:02x} {:02x} \
+        "PC=${:04x}, SP=${:04x} \
                 A=${:02x} BC=${:04x} DE=${:04x} HL=${:04x} IX=${:04x} IY=${:04x} \
-                {}{}-{}-{}{}{}       {}",
+                {}{}-{}-{}{}{}    {}",
         cpu.reg(Register::PC),
-        opcodes[0],
-        bus.mem_read(0x103),
-        bus.mem_read(0x104),
+        cpu.reg(Register::SP),
         cpu.reg(Register::A),
         cpu.reg(Register::BC),
         cpu.reg(Register::DE),
@@ -84,12 +80,40 @@ fn main() -> Result<(), std::io::Error> {
 
     cpu.reset();
 
+    // to implement a simple debugger:
+    // https://docs.rs/rustyline/6.2.0/rustyline/
+    // https://docs.rs/ctrlc/3.1.5/ctrlc/
+    //
+    // or
+    // https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities
+
     loop {
         let mut instr = [0u8; 4];
         cpu.get_current_opcodes(&mut bus, &mut instr);
         let pc = cpu.reg(Register::PC);
-        if pc >= 0x0261 && pc <= 0x0292 {
+        if pc >= 0x32a && pc < 0x470 {
             print_cpu(&cpu, &mut bus);
+        }
+        if pc == 0x0413 && cpu.reg(Register::A) != 0x04 {
+            let base = cpu.reg(Register::HL) as usize;
+            let frame = cpu.reg(Register::A);
+            let range = if frame == 0x01 { 0..8 } else { 0..64 };
+            for i in range {
+                print!("{:04x}   ", base + i * 16);
+                let mut m = [0u8; 16];
+                for b in 0..16 {
+                    m[b] = bus.mem_read((base + i * 16 + b) as u32);
+                    print!("{:02x} ", m[b]);
+                    if b == 7 {
+                        print!(" ");
+                    }
+                }
+                print!("     ");
+                for b in 0..16 {
+                    print!("{}", if m[b] >= 32 { m[b] as char } else { '.' });
+                }
+                println!("");
+            }
         }
         if cpu.mode != Mode::OpCodeFetch {
             break;

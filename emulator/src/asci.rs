@@ -119,7 +119,6 @@ impl Peripheral for ASCI {
             let mut buf = [0u8; 1];
             match rx.read(&mut buf) {
                 Ok(_) => {
-                    println!("ASCI0 received character {}", buf[0] as char);
                     *self.rdr.borrow_mut() = buf[0];
                     *stat |= 0b1000_0000;
                 }
