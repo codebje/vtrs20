@@ -39,4 +39,10 @@ impl CPU {
         let addr = self.load_operand(bus, port) | (self.reg(Register::A) << 8);
         self.gr.a = bus.io_read(addr);
     }
+
+    pub(super) fn in_c(&mut self, bus: &mut Bus, dest: Operand) {
+        let addr = (self.reg(Register::B) << 8) | self.reg(Register::C);
+        let val = bus.io_read(addr);
+        self.store_operand(bus, dest, val as u16);
+    }
 }

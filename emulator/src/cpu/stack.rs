@@ -22,8 +22,8 @@ impl CPU {
     // All pops are also 16-bit.
     pub(super) fn pop(&mut self, bus: &mut Bus, dst: Operand) {
         let sp = Wrapping(self.sr.sp);
-        let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp)) as u16;
-        let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0)) as u16;
+        let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp), false) as u16;
+        let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0), false) as u16;
         self.store_operand(bus, dst, lo | hi << 8);
         self.sr.sp = (sp + Wrapping(2)).0;
     }
@@ -43,24 +43,24 @@ impl CPU {
             }
             Exchange::SP_HL => {
                 let sp = Wrapping(self.sr.sp);
-                let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp)) as u16;
-                let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0)) as u16;
+                let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp), false) as u16;
+                let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0), false) as u16;
                 bus.mem_write(self.mmu.to_physical(self.sr.sp), self.gr.hl as u8);
                 bus.mem_write(self.mmu.to_physical((sp + Wrapping(1)).0), (self.gr.hl >> 8) as u8);
                 self.gr.hl = lo | hi << 8;
             }
             Exchange::SP_IX => {
                 let sp = Wrapping(self.sr.sp);
-                let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp)) as u16;
-                let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0)) as u16;
+                let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp), false) as u16;
+                let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0), false) as u16;
                 bus.mem_write(self.mmu.to_physical(self.sr.sp), self.sr.ix as u8);
                 bus.mem_write(self.mmu.to_physical((sp + Wrapping(1)).0), (self.sr.ix >> 8) as u8);
                 self.sr.ix = lo | hi << 8;
             }
             Exchange::SP_IY => {
                 let sp = Wrapping(self.sr.sp);
-                let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp)) as u16;
-                let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0)) as u16;
+                let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp), false) as u16;
+                let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0), false) as u16;
                 bus.mem_write(self.mmu.to_physical(self.sr.sp), self.sr.iy as u8);
                 bus.mem_write(self.mmu.to_physical((sp + Wrapping(1)).0), (self.sr.iy >> 8) as u8);
                 self.sr.iy = lo | hi << 8;

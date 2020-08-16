@@ -50,11 +50,13 @@ impl CPU {
     }
 
     pub(super) fn di(&mut self) {
-        self.ie = false;
+        self.ief1 = false;
+        self.ief2 = false;
     }
 
     pub(super) fn ei(&mut self) {
-        self.ie = true;
+        self.ief1 = true;
+        self.ief2 = true;
     }
 }
 

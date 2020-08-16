@@ -25,12 +25,12 @@ impl Peripheral for ROM {
         *self.is_masking.borrow_mut() = true;
     }
 
-    fn mem_read(&self, address: u32) -> Option<u8> {
+    fn mem_read(&self, address: u32, m1: bool) -> Option<u8> {
         let mut addr = address;
 
         // After reset the ROM forces A19 high until the processor
         // has driven it high on its own.
-        if (addr & 0b1000_0000_0000_0000_0000) != 0 {
+        if m1 && (addr & 0b1000_0000_0000_0000_0000) != 0 {
             *self.is_masking.borrow_mut() = false;
         }
 

@@ -198,12 +198,12 @@ pub fn disasm(opcodes: &[u8]) -> String {
         0b10_101_110 => "xor\t(hl)".to_string(),
         0b10_101_111 => "xor\ta".to_string(),
 
-        0b10_110_000 => "or\ta".to_string(),
-        0b10_110_001 => "or\ta".to_string(),
-        0b10_110_010 => "or\ta".to_string(),
-        0b10_110_011 => "or\ta".to_string(),
-        0b10_110_100 => "or\ta".to_string(),
-        0b10_110_101 => "or\ta".to_string(),
+        0b10_110_000 => "or\tb".to_string(),
+        0b10_110_001 => "or\tc".to_string(),
+        0b10_110_010 => "or\td".to_string(),
+        0b10_110_011 => "or\te".to_string(),
+        0b10_110_100 => "or\th".to_string(),
+        0b10_110_101 => "or\tl".to_string(),
         0b10_110_110 => "or\tahl)".to_string(),
         0b10_110_111 => "or\ta".to_string(),
 
@@ -318,6 +318,8 @@ fn extended(opcodes: &[u8]) -> String {
         0b00_110_100 => format!("tst\t(hl)"),
         0b00_111_100 => format!("tst\ta"),
         0b01_100_100 => format!("tst\t{:08b}b", opcodes[1]),
+
+        0b01_001_101 => "reti".to_string(),
 
         0b01_000_100 => "neg".to_string(),
 

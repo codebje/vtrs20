@@ -2,7 +2,7 @@ use std::num::Wrapping;
 use std::rc::Rc;
 
 use crate::bus::Bus;
-use crate::types::Peripheral;
+use crate::types::*;
 
 // enums
 pub mod enums;
@@ -24,6 +24,7 @@ mod dispatch;
 
 // peripherals
 mod mmu;
+mod reg;
 
 pub use enums::*;
 
@@ -115,10 +116,12 @@ pub struct CPU {
     // internal state
     pub mode: Mode,
     mmu: Rc<mmu::MMU>,
+    ivl: Rc<reg::Reg>,
     gr: GR,
     gr_: GR,
     sr: SR,
-    ie: bool,
+    ief1: bool,
+    ief2: bool,
 }
 
 impl CPU {
@@ -131,9 +134,12 @@ impl CPU {
     pub fn new(bus: &mut Bus) -> CPU {
         let mmu = Rc::new(mmu::MMU::new());
         bus.add(Rc::clone(&mmu) as Rc<dyn Peripheral>);
+        let ivl = Rc::new(reg::Reg::new(0, 0x33));
+        bus.add(Rc::clone(&ivl) as Rc<dyn Peripheral>);
         CPU {
             mode: Mode::Reset,
             mmu: mmu,
+            ivl: ivl,
             gr: GR {
                 a: 0,
                 f: 0,
@@ -156,7 +162,8 @@ impl CPU {
                 sp: 0x0000,
                 pc: 0x0000,
             },
-            ie: false,
+            ief1: false,
+            ief2: false,
         }
     }
 
@@ -228,7 +235,9 @@ impl CPU {
 
     // Run one machine cycle. This will assert various signals on the bus to do its job.
     pub fn cycle(&mut self, bus: &mut Bus) {
-        bus.cycle();
+        let mut intr = bus.cycle();
+
+        // Run the next machine cycle before checking the interrupt
         match self.mode {
             Mode::Reset => (),
             Mode::OpCodeFetch => {
@@ -236,6 +245,34 @@ impl CPU {
                 self.dispatch(bus);
             }
             Mode::Halt => (),
+        }
+
+        if self.ief1 == false {
+            intr = None;
+        }
+        match intr {
+            Some(Interrupt::ASCI0) => {
+                let ivl = self.ivl.val() as u16;
+                let addr: u16 = (self.reg(Register::I) << 8) | (ivl & 0xe0) | 0x0e;
+                let alo = bus.mem_read(self.mmu.to_physical(addr), false) as u16;
+                let ahi = (bus.mem_read(self.mmu.to_physical((Wrapping(addr) + Wrapping(1)).0), false) as u16) << 8;
+                let handler = ahi | alo;
+                // push current pc
+                let sp = Wrapping(self.sr.sp);
+                bus.mem_write(self.mmu.to_physical((sp - Wrapping(1)).0), (self.sr.pc >> 8) as u8);
+                bus.mem_write(self.mmu.to_physical((sp - Wrapping(2)).0), self.sr.pc as u8);
+                self.sr.sp = (sp - Wrapping(2)).0;
+                // disable interrupts
+                self.ief1 = false;
+                self.ief2 = false;
+                // set pc to addr
+                self.sr.pc = handler;
+                bus.intack(Interrupt::ASCI0);
+            }
+            Some(int) => {
+                bus.intack(int);
+            }
+            _ => (),
         }
     }
 
@@ -251,10 +288,10 @@ impl CPU {
     }
 
     pub fn get_current_opcodes(&mut self, bus: &mut Bus, opcodes: &mut [u8; 4]) {
-        opcodes[0] = bus.mem_read(self.mmu.to_physical(self.sr.pc));
-        opcodes[1] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1));
-        opcodes[2] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 2));
-        opcodes[3] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 3));
+        opcodes[0] = bus.mem_read(self.mmu.to_physical(self.sr.pc), false);
+        opcodes[1] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1), false);
+        opcodes[2] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 2), false);
+        opcodes[3] = bus.mem_read(self.mmu.to_physical(self.sr.pc + 3), false);
     }
 
     pub fn get_cpu_mode(&self) -> Mode {
@@ -265,47 +302,51 @@ impl CPU {
     fn load_operand(&mut self, bus: &mut Bus, operand: Operand) -> u16 {
         match operand {
             Operand::Absolute(v) => v as u16,
-            Operand::Memory(addr) => bus.mem_read(self.mmu.to_physical(addr)) as u16,
+            Operand::Memory(addr) => bus.mem_read(self.mmu.to_physical(addr), false) as u16,
             Operand::Direct(reg) => self.reg(reg),
-            Operand::Indirect(reg) => bus.mem_read(self.mmu.to_physical(self.reg(reg))) as u16,
+            Operand::Indirect(reg) => bus.mem_read(self.mmu.to_physical(self.reg(reg)), false) as u16,
             Operand::Indexed(reg) => {
-                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
+                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as i8;
                 let addr = self.reg(reg) as i32 + d as i32;
                 self.sr.pc += 1;
-                bus.mem_read(self.mmu.to_physical(addr as u16)) as u16
+                bus.mem_read(self.mmu.to_physical(addr as u16), false) as u16
             }
             Operand::Extended() => {
-                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
-                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1), false) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
-                bus.mem_read(self.mmu.to_physical(addr)) as u16
+                bus.mem_read(self.mmu.to_physical(addr), false) as u16
             }
             Operand::Extended16() => {
-                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
-                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1), false) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
-                let lo = bus.mem_read(self.mmu.to_physical(addr)) as u16;
-                let hi = bus.mem_read(self.mmu.to_physical(addr + 1)) as u16;
+                let lo = bus.mem_read(self.mmu.to_physical(addr), false) as u16;
+                let hi = bus.mem_read(self.mmu.to_physical(addr + 1), false) as u16;
                 hi << 8 | lo
             }
             Operand::Immediate() => {
-                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
                 self.sr.pc += 1;
                 m
             }
             Operand::Immediate16() => {
-                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
-                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1), false) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
                 addr
             }
             Operand::Relative() => {
-                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
+                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as i8;
                 self.sr.pc += 1;
                 (self.sr.pc as i32 + d as i32) as u16
+            }
+            Operand::Discard() => {
+                self.error("Loading a flags-only operand");
+                0
             }
         }
     }
@@ -318,21 +359,21 @@ impl CPU {
             Operand::Direct(reg) => self.write_reg(reg, value),
             Operand::Indirect(reg) => bus.mem_write(self.mmu.to_physical(self.reg(reg)), value as u8),
             Operand::Indexed(reg) => {
-                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as i8;
+                let d = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as i8;
                 let addr = self.reg(reg) as i32 + d as i32;
                 self.sr.pc += 1;
                 bus.mem_write(self.mmu.to_physical(addr as u16), value as u8);
             }
             Operand::Extended() => {
-                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
-                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1), false) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
                 bus.mem_write(self.mmu.to_physical(addr), value as u8);
             }
             Operand::Extended16() => {
-                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
-                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1)) as u16;
+                let n = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
+                let m = bus.mem_read(self.mmu.to_physical(self.sr.pc + 1), false) as u16;
                 let addr = m << 8 | n;
                 self.sr.pc += 2;
                 bus.mem_write(self.mmu.to_physical(addr), value as u8);
@@ -341,6 +382,7 @@ impl CPU {
             Operand::Immediate() => self.error("store imm"),
             Operand::Immediate16() => self.error("store imm"),
             Operand::Relative() => self.error("store rel"),
+            Operand::Discard() => (),
         }
     }
 

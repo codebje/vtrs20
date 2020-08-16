@@ -34,9 +34,9 @@ impl MMU {
         if addr < bank {
             addr.into()
         } else if addr < common {
-            addr as u32 + ((*self.bbr.borrow() as u32) << 12) - bank as u32
+            addr as u32 + ((*self.bbr.borrow() as u32) << 12) as u32
         } else {
-            addr as u32 + ((*self.cbr.borrow() as u32) << 12) - common as u32
+            addr as u32 + ((*self.cbr.borrow() as u32) << 12) as u32
         }
     }
 }

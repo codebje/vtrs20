@@ -50,8 +50,8 @@ impl CPU {
     pub(super) fn ret(&mut self, bus: &mut Bus, condition: Option<Condition>) {
         if self.is_condition(condition) {
             let sp = Wrapping(self.sr.sp);
-            let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp)) as u16;
-            let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0)) as u16;
+            let lo = bus.mem_read(self.mmu.to_physical(self.sr.sp), false) as u16;
+            let hi = bus.mem_read(self.mmu.to_physical((sp + Wrapping(1)).0), false) as u16;
             self.sr.sp = (sp + Wrapping(2)).0;
             self.sr.pc = lo | hi << 8;
         }
@@ -59,7 +59,11 @@ impl CPU {
 
     // this looks a hecking lot like it can just jump anywhere, which it can.
     // dispatch will invoke it only for specific vector addresses.
-    pub(super) fn rst(&mut self, vec: u16) {
+    pub(super) fn rst(&mut self, bus: &mut Bus, vec: u16) {
+        let sp = Wrapping(self.sr.sp);
+        bus.mem_write(self.mmu.to_physical((sp - Wrapping(1)).0), (self.sr.pc >> 8) as u8);
+        bus.mem_write(self.mmu.to_physical((sp - Wrapping(2)).0), self.sr.pc as u8);
+        self.sr.sp = (sp - Wrapping(2)).0;
         self.sr.pc = vec;
     }
 

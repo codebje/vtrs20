@@ -4,7 +4,7 @@ use crate::cpu::*;
 impl CPU {
     // Fetch, decode, dispatch.
     pub(super) fn dispatch(&mut self, bus: &mut Bus) {
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc), true);
         self.sr.pc += 1;
 
         // The full 256 opcode values are listed explicitly to allow a jump table to be
@@ -235,7 +235,7 @@ impl CPU {
             0b11_000_100 => self.call(bus, Operand::Immediate16(), Some(Condition::NonZero)),
             0b11_000_101 => self.push(bus, Operand::Direct(Register::BC)),
             0b11_000_110 => self.add_a(bus, Operand::Immediate(), false),
-            0b11_000_111 => self.rst(0x00),
+            0b11_000_111 => self.rst(bus, 0x00),
 
             0b11_001_000 => self.ret(bus, Some(Condition::Zero)),
             0b11_001_001 => self.ret(bus, None),
@@ -244,7 +244,7 @@ impl CPU {
             0b11_001_100 => self.call(bus, Operand::Immediate16(), Some(Condition::Zero)),
             0b11_001_101 => self.call(bus, Operand::Immediate16(), None),
             0b11_001_110 => self.add_a(bus, Operand::Immediate(), true),
-            0b11_001_111 => self.rst(0x08),
+            0b11_001_111 => self.rst(bus, 0x08),
 
             0b11_010_000 => self.ret(bus, Some(Condition::NonCarry)),
             0b11_010_001 => self.pop(bus, Operand::Direct(Register::DE)),
@@ -253,7 +253,7 @@ impl CPU {
             0b11_010_100 => self.call(bus, Operand::Immediate16(), Some(Condition::NonCarry)),
             0b11_010_101 => self.push(bus, Operand::Direct(Register::DE)),
             0b11_010_110 => self.sub_a(bus, Operand::Immediate(), false, true),
-            0b11_010_111 => self.rst(0x10),
+            0b11_010_111 => self.rst(bus, 0x10),
 
             0b11_011_000 => self.ret(bus, Some(Condition::Carry)),
             0b11_011_001 => self.exchange(bus, Exchange::X),
@@ -262,7 +262,7 @@ impl CPU {
             0b11_011_100 => self.call(bus, Operand::Immediate16(), Some(Condition::Carry)),
             0b11_011_101 => self.index(bus, RegIndex::IX),
             0b11_011_110 => self.sub_a(bus, Operand::Immediate(), true, true),
-            0b11_011_111 => self.rst(0x18),
+            0b11_011_111 => self.rst(bus, 0x18),
 
             0b11_100_000 => self.ret(bus, Some(Condition::ParityOdd)),
             0b11_100_001 => self.pop(bus, Operand::Direct(Register::HL)),
@@ -271,7 +271,7 @@ impl CPU {
             0b11_100_100 => self.call(bus, Operand::Immediate16(), Some(Condition::ParityOdd)),
             0b11_100_101 => self.push(bus, Operand::Direct(Register::HL)),
             0b11_100_110 => self.and_a(bus, Operand::Immediate()),
-            0b11_100_111 => self.rst(0x20),
+            0b11_100_111 => self.rst(bus, 0x20),
 
             0b11_101_000 => self.ret(bus, Some(Condition::ParityEven)),
             0b11_101_001 => self.jp(bus, Operand::Direct(Register::HL), None),
@@ -280,7 +280,7 @@ impl CPU {
             0b11_101_100 => self.call(bus, Operand::Immediate16(), Some(Condition::ParityEven)),
             0b11_101_101 => self.extended(bus),
             0b11_101_110 => self.xor_a(bus, Operand::Immediate()),
-            0b11_101_111 => self.rst(0x28),
+            0b11_101_111 => self.rst(bus, 0x28),
 
             0b11_110_000 => self.ret(bus, Some(Condition::SignPlus)),
             0b11_110_001 => self.pop(bus, Operand::Direct(Register::AF)),
@@ -289,7 +289,7 @@ impl CPU {
             0b11_110_100 => self.call(bus, Operand::Immediate16(), Some(Condition::SignPlus)),
             0b11_110_101 => self.push(bus, Operand::Direct(Register::AF)),
             0b11_110_110 => self.or_a(bus, Operand::Immediate()),
-            0b11_110_111 => self.rst(0x30),
+            0b11_110_111 => self.rst(bus, 0x30),
 
             0b11_111_000 => self.ret(bus, Some(Condition::SignMinus)),
             0b11_111_001 => self.ld_16(bus, Operand::Direct(Register::HL), Operand::Direct(Register::SP)),
@@ -298,14 +298,14 @@ impl CPU {
             0b11_111_100 => self.call(bus, Operand::Immediate16(), Some(Condition::SignMinus)),
             0b11_111_101 => self.index(bus, RegIndex::IY),
             0b11_111_110 => self.sub_a(bus, Operand::Immediate(), false, false),
-            0b11_111_111 => self.rst(0x38),
+            0b11_111_111 => self.rst(bus, 0x38),
         }
     }
 
     // Extended instructions. Again, only constant expressions are used to allow a lookup table.
     // Unlike the basic opcode set the $ED group isn't complete, so there is a default entry.
     fn extended(&mut self, bus: &mut Bus) {
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc), false);
         self.sr.pc += 1;
         let errstr = format!("Extended opcode {:02x}", opcode);
 
@@ -335,6 +335,18 @@ impl CPU {
             0b00_110_100 => self.tst_a(bus, Operand::Indirect(RegIndirect::HL)),
             0b00_111_100 => self.tst_a(bus, Operand::Direct(Register::A)),
             0b01_100_100 => self.tst_a(bus, Operand::Immediate()),
+
+            0b01_000_000 => self.in_c(bus, Operand::Direct(Register::B)),
+            0b01_001_000 => self.in_c(bus, Operand::Direct(Register::C)),
+            0b01_010_000 => self.in_c(bus, Operand::Direct(Register::D)),
+            0b01_011_000 => self.in_c(bus, Operand::Direct(Register::E)),
+            0b01_100_000 => self.in_c(bus, Operand::Direct(Register::H)),
+            0b01_101_000 => self.in_c(bus, Operand::Direct(Register::L)),
+            0b01_110_000 => self.in_c(bus, Operand::Direct(Register::L)),
+            0b01_111_000 => self.in_c(bus, Operand::Direct(Register::A)),
+
+            // reti
+            0b01_001_101 => self.ret(bus, None),
 
             0b01_000_100 => self.neg(),
 
@@ -377,7 +389,7 @@ impl CPU {
 
     // Bit instructions: rot, shift, test.
     fn bits(&mut self, bus: &mut Bus) {
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc), false);
         self.sr.pc += 1;
 
         match opcode {
@@ -705,14 +717,14 @@ impl CPU {
     }
 
     fn resolve_index(&mut self, bus: &mut Bus, index: RegIndex) -> Operand {
-        let d = bus.mem_read(self.mmu.to_physical(self.sr.pc)) as u16;
+        let d = bus.mem_read(self.mmu.to_physical(self.sr.pc), false) as u16;
         self.sr.pc += 1;
         Operand::Memory(self.reg(index) + d)
     }
 
     // Index register opcodes. The opcode sets are identical for IX and IY.
     fn index(&mut self, bus: &mut Bus, index: RegIndex) {
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc), false);
         let errstr = format!("Index {:?} opcode {:02x}", index, opcode);
         self.sr.pc += 1;
 
@@ -784,7 +796,7 @@ impl CPU {
     // Index bit manipulation opcodes. The opcode sets are identical for IX and IY.
     fn index_bits(&mut self, bus: &mut Bus, index: RegIndex) {
         let arg = self.resolve_index(bus, index);
-        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc));
+        let opcode = bus.mem_read(self.mmu.to_physical(self.sr.pc), false);
         self.sr.pc += 1;
         let errstr = format!("Index {:?} bitops opcode {:02x}", index, opcode);
 

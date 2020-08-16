@@ -77,7 +77,7 @@ impl DMA {
     }
 
     fn sar0(&self) -> u32 {
-        (*self.sar0b.borrow() as u32) << 16 | (*self.sar0h.borrow() as u32) << 8 | (*self.sar0h.borrow() as u32)
+        (*self.sar0b.borrow() as u32) << 16 | (*self.sar0h.borrow() as u32) << 8 | (*self.sar0l.borrow() as u32)
     }
 
     fn set_sar0(&self, sar0: u32) {
@@ -87,7 +87,7 @@ impl DMA {
     }
 
     fn dar0(&self) -> u32 {
-        (*self.dar0b.borrow() as u32) << 16 | (*self.dar0h.borrow() as u32) << 8 | (*self.dar0h.borrow() as u32)
+        (*self.dar0b.borrow() as u32) << 16 | (*self.dar0h.borrow() as u32) << 8 | (*self.dar0l.borrow() as u32)
     }
 
     fn set_dar0(&self, dar0: u32) {
@@ -115,12 +115,13 @@ impl Peripheral for DMA {
         // Here I assume that programming the DMAC with a count of zero will in fact transfer
         // 65,536 bytes, not zero.
         if *dstat & 0b0100_0001 == 0b0100_0001 {
-            println!("**** DMAC transferring data");
             let mut src = self.sar0();
             let mut dst = self.dar0();
             let mut count = self.bcr0();
+            let cmax = if count == 0 { 0x1_0000 } else { count as u64 };
+            println!("**** DMAC transferring {:4x} bytes from {:5x} to {:5x}", cmax, src, dst);
             loop {
-                let byte = bus.mem_read(src);
+                let byte = bus.mem_read(src, false);
                 bus.mem_write(dst, byte);
 
                 match dmode & 0b0011_0000 {
@@ -150,7 +151,7 @@ impl Peripheral for DMA {
                 }
             }
             self.set_sar0(src);
-            self.set_dar0(src);
+            self.set_dar0(dst);
             self.set_bcr0(count);
         }
 

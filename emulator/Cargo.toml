@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 bitflags = "1.2.1"
+enumset = "1.0.1"
 mio-serial = "3.3.1"
 
 [dev-dependencies]

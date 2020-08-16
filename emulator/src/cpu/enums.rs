@@ -111,6 +111,7 @@ pub(super) enum Operand {
     Immediate(),
     Immediate16(),
     Relative(),
+    Discard(),
 }
 
 #[derive(Debug)]

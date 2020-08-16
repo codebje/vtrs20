@@ -62,7 +62,7 @@ impl CPU {
     // high nibble of (hl) moves to low nibble of a
     // low nibble of a moves to low nibble of (hl)
     pub(super) fn rld(&mut self, bus: &mut Bus) {
-        let hl = bus.mem_read(self.mmu.to_physical(self.gr.hl));
+        let hl = bus.mem_read(self.mmu.to_physical(self.gr.hl), false);
         let a = self.gr.a & 0xf0 | ((hl & 0xf0) >> 4);
         let result = ((hl & 0x0f) << 4) | self.gr.a & 0x0f;
         bus.mem_write(self.mmu.to_physical(self.gr.hl), result);
@@ -75,7 +75,7 @@ impl CPU {
     // high nibble of (hl) moves to low nibble of (hl)
     // low nibble of (hl) moves to a
     pub(super) fn rrd(&mut self, bus: &mut Bus) {
-        let hl = bus.mem_read(self.mmu.to_physical(self.gr.hl));
+        let hl = bus.mem_read(self.mmu.to_physical(self.gr.hl), false);
         let a = self.gr.a & 0xf0 | (hl & 0x0f);
         let result = ((hl & 0xf0) >> 4) | ((self.gr.a & 0x0f) << 4);
         bus.mem_write(self.mmu.to_physical(self.gr.hl), result);

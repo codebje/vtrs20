@@ -46,6 +46,11 @@ impl ASCI {
         }
     }
 
+    fn set_stat(&self, data: u8, mask: u8) {
+        let mut stat = self.stat.borrow_mut();
+        *stat = (*stat & !mask) | (data & mask);
+    }
+
     fn setup(&self) {
         let cntlb = *self.cntlb.borrow();
         let _mode = (*self.cntla.borrow() & 0b0111) | (cntlb & 0b1_0000);
@@ -71,6 +76,7 @@ impl ASCI {
                                                 //let byte = *self.tdr.borrow();
                                                 //self.serial.borrow_mut().write(&[byte]).unwrap();
     }
+
     fn recv(&self) {
         *self.stat.borrow_mut() &= 0b0111_1111;
     }
@@ -98,6 +104,7 @@ impl ASCI {
 impl Peripheral for ASCI {
     fn cycle(&self, _bus: &Bus) -> Option<Interrupt> {
         let mut stat = self.stat.borrow_mut();
+        let mut int = None;
 
         // if TDRE is reset, try to send a byte
         if *stat & 0b0000_0010 == 0 {
@@ -105,6 +112,11 @@ impl Peripheral for ASCI {
             match self.serial.borrow_mut().write(&[byte]) {
                 Ok(_) => {
                     *stat |= 0b0000_0010;
+                    int = if (*stat & 0b0000_0001) != 0 {
+                        Some(Interrupt::ASCI0)
+                    } else {
+                        None
+                    };
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => (),
                 Err(ref e) => {
@@ -121,6 +133,11 @@ impl Peripheral for ASCI {
                 Ok(_) => {
                     *self.rdr.borrow_mut() = buf[0];
                     *stat |= 0b1000_0000;
+                    int = if *stat & 0b0000_1000 == 0b0000_1000 {
+                        Some(Interrupt::ASCI0)
+                    } else {
+                        None
+                    };
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => (),
                 Err(ref e) => {
@@ -129,7 +146,7 @@ impl Peripheral for ASCI {
             }
         }
 
-        None
+        int
     }
 
     #[rustfmt::skip]
@@ -156,8 +173,8 @@ impl Peripheral for ASCI {
             0x0001 => if self.channel == Channel::CH1 { *self.cntla.borrow_mut() = data; self.setup(); },
             0x0002 => if self.channel == Channel::CH0 { *self.cntlb.borrow_mut() = data; self.setup(); },
             0x0003 => if self.channel == Channel::CH1 { *self.cntlb.borrow_mut() = data; self.setup(); },
-            0x0004 => if self.channel == Channel::CH0 { *self.stat.borrow_mut() = data },
-            0x0005 => if self.channel == Channel::CH1 { *self.stat.borrow_mut() = data },
+            0x0004 => if self.channel == Channel::CH0 { self.set_stat(data, 0b0000_1001) },
+            0x0005 => if self.channel == Channel::CH1 { self.set_stat(data, 0b0000_1101) },
             0x0006 => if self.channel == Channel::CH0 { *self.tdr.borrow_mut() = data; self.xmit(); },
             0x0007 => if self.channel == Channel::CH1 { *self.tdr.borrow_mut() = data; self.xmit(); },
             0x0008 => if self.channel == Channel::CH0 { *self.rdr.borrow_mut() = data },

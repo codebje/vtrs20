@@ -20,8 +20,7 @@ impl RAM {
 
     pub fn write(&self, address: u32, data: &[u8]) {
         let limit = min(data.len(), (self.size + self.start - address) as usize);
-        self.bytes.borrow_mut()[(address - self.start) as usize..(limit + address as usize)]
-            .copy_from_slice(&data[..limit]);
+        self.bytes.borrow_mut()[(address - self.start) as usize..(limit + address as usize)].copy_from_slice(&data[..limit]);
     }
 
     pub fn load_file(&self, address: u32, filename: &str) -> Result<(), std::io::Error> {
@@ -32,11 +31,8 @@ impl RAM {
 }
 
 impl Peripheral for RAM {
-    fn mem_read(&self, address: u32) -> Option<u8> {
+    fn mem_read(&self, address: u32, _m1: bool) -> Option<u8> {
         if address >= self.start && address <= self.start + self.size {
-            if address == 0xC06F {
-                println!("Read of 0xC06F");
-            }
             return Some(self.bytes.borrow()[(address - self.start) as usize]);
         }
         None

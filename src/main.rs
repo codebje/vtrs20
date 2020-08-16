@@ -1,4 +1,6 @@
+use std::num::Wrapping;
 use std::rc::Rc;
+use std::{thread, time};
 
 use clap::{App, Arg};
 
@@ -10,13 +12,9 @@ use emulator::prt::*;
 use emulator::ram::*;
 use emulator::rom::*;
 
-fn print_cpu(cpu: &CPU, bus: &mut Bus) {
-    let opcodes = [
-        bus.mem_read(cpu.reg(Register::PC) as u32), // assume identity MMU
-        bus.mem_read(cpu.reg(Register::PC) as u32 + 1),
-        bus.mem_read(cpu.reg(Register::PC) as u32 + 2),
-        bus.mem_read(cpu.reg(Register::PC) as u32 + 3),
-    ];
+fn print_cpu(cpu: &mut CPU, bus: &mut Bus) {
+    let mut opcodes: [u8; 4] = [0, 0, 0, 0];
+    cpu.get_current_opcodes(bus, &mut opcodes);
     let flags = cpu.reg(Register::F);
     println!(
         "PC=${:04x}, SP=${:04x} \
@@ -86,34 +84,28 @@ fn main() -> Result<(), std::io::Error> {
     //
     // or
     // https://microsoft.github.io/debug-adapter-protocol/specification#Types_Capabilities
+    //
+    // consider reading .lst file with symtab
 
+    let mut bkpt = 0xfff0;
+    let mut tracing = false;
     loop {
-        let mut instr = [0u8; 4];
-        cpu.get_current_opcodes(&mut bus, &mut instr);
         let pc = cpu.reg(Register::PC);
-        if pc >= 0x32a && pc < 0x470 {
-            print_cpu(&cpu, &mut bus);
+        if pc == 0x61d2 {
+            tracing = true;
+
+            let delay = time::Duration::from_millis(100);
+            thread::sleep(delay);
+            bkpt = 0x1f8;
         }
-        if pc == 0x0413 && cpu.reg(Register::A) != 0x04 {
-            let base = cpu.reg(Register::HL) as usize;
-            let frame = cpu.reg(Register::A);
-            let range = if frame == 0x01 { 0..8 } else { 0..64 };
-            for i in range {
-                print!("{:04x}   ", base + i * 16);
-                let mut m = [0u8; 16];
-                for b in 0..16 {
-                    m[b] = bus.mem_read((base + i * 16 + b) as u32);
-                    print!("{:02x} ", m[b]);
-                    if b == 7 {
-                        print!(" ");
-                    }
-                }
-                print!("     ");
-                for b in 0..16 {
-                    print!("{}", if m[b] >= 32 { m[b] as char } else { '.' });
-                }
-                println!("");
-            }
+        if tracing {
+            print_cpu(&mut cpu, &mut bus);
+            let one_ms = time::Duration::from_millis(1);
+            thread::sleep(one_ms);
+        }
+        if pc == bkpt {
+            bkpt = 0xfff0;
+            tracing = false;
         }
         if cpu.mode != Mode::OpCodeFetch {
             break;
