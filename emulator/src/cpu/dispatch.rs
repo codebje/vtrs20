@@ -371,17 +371,20 @@ impl CPU {
             0b01_011_011 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::DE)),
             0b01_111_011 => self.ld_16(bus, Operand::Extended16(), Operand::Direct(Register::SP)),
 
-            0b10_100_000 => self.ldi(bus, false),
-            0b10_110_000 => self.ldi(bus, true),
-
             0b01_100_111 => self.rrd(bus),
             0b01_101_111 => self.rld(bus),
 
-            // Block transfers
-            0b10_101_000 => self.ldd(bus, false),
-            0b10_111_000 => self.ldd(bus, true),
-            0b10_101_001 => self.cpd(bus, false),
-            0b10_111_001 => self.cpd(bus, true),
+            0b10_100_000 => self.ldi(bus, Direction::Increment, true),
+            0b10_110_000 => self.ldi(bus, Direction::Increment, true),
+
+            0b10_100_001 => self.cpi(bus, Direction::Increment, false),
+            0b10_110_001 => self.cpi(bus, Direction::Increment, true),
+
+            0b10_101_000 => self.ldi(bus, Direction::Decrement, false),
+            0b10_111_000 => self.ldi(bus, Direction::Decrement, true),
+
+            0b10_101_001 => self.cpi(bus, Direction::Decrement, false),
+            0b10_111_001 => self.cpi(bus, Direction::Decrement, true),
 
             _ => self.error(&errstr),
         }

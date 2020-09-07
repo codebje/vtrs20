@@ -23,6 +23,11 @@ impl RAM {
         self.bytes.borrow_mut()[(address - self.start) as usize..(limit + address as usize)].copy_from_slice(&data[..limit]);
     }
 
+    pub fn read(&self, address: u32, data: &mut [u8]) {
+        let limit = min(data.len(), (self.size + self.start - address) as usize);
+        data[..limit].copy_from_slice(&self.bytes.borrow()[(address - self.start) as usize..(limit + address as usize)]);
+    }
+
     pub fn load_file(&self, address: u32, filename: &str) -> Result<(), std::io::Error> {
         let buffer = std::fs::read(filename)?;
         self.write(address, buffer.as_slice());

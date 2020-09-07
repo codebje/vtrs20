@@ -1,4 +1,3 @@
-use std::num::Wrapping;
 use std::rc::Rc;
 use std::{thread, time};
 
@@ -60,7 +59,7 @@ fn main() -> Result<(), std::io::Error> {
     let rom = Rc::new(ROM::new(0x80000, rom_data));
 
     bus.add(rom); // ROM is first to allow address masking to work
-    bus.add(ram);
+    bus.add(ram.clone());
 
     let prt = Rc::new(PRT::new());
     bus.add(prt);
@@ -91,17 +90,35 @@ fn main() -> Result<(), std::io::Error> {
     let mut tracing = false;
     loop {
         let pc = cpu.reg(Register::PC);
-        if pc == 0x61d2 {
+        if pc == 0x251 {
             tracing = true;
 
             let delay = time::Duration::from_millis(100);
             thread::sleep(delay);
-            bkpt = 0x1f8;
+            bkpt = 0xe000;
         }
         if tracing {
             print_cpu(&mut cpu, &mut bus);
             let one_ms = time::Duration::from_millis(1);
             thread::sleep(one_ms);
+        }
+        if pc == 0xe000 {
+            for row in 0..15 {
+                let mut data: [u8; 16] = [0; 16];
+                ram.read(0xfa00 + (row * 16), &mut data);
+                print!("{:05x}  ", 0xfa00 + (row * 16));
+                for byte in 0..7 {
+                    print!("{:02x} ", data[byte]);
+                }
+                print!(" ");
+                for byte in 8..15 {
+                    print!("{:02x} ", data[byte]);
+                }
+                println!("");
+            }
+        }
+        if pc == 0xf7a1 {
+            print_cpu(&mut cpu, &mut bus);
         }
         if pc == bkpt {
             bkpt = 0xfff0;

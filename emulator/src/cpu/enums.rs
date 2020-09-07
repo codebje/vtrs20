@@ -180,3 +180,15 @@ pub(super) enum ShiftMode {
     R8080,
     RZ80,
 }
+
+/**
+ * Block instruction direction
+ *
+ * Increment affects how HL and DE are modified by ldi/ldd, cpi/cpd, ini/ind, and outi/outd and
+ * their recursive counterparts.
+ */
+#[derive(Debug)]
+pub(super) enum Direction {
+    Increment,
+    Decrement,
+}

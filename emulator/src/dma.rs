@@ -118,8 +118,15 @@ impl Peripheral for DMA {
             let mut src = self.sar0();
             let mut dst = self.dar0();
             let mut count = self.bcr0();
+            /*
             let cmax = if count == 0 { 0x1_0000 } else { count as u64 };
-            println!("**** DMAC transferring {:4x} bytes from {:5x} to {:5x}", cmax, src, dst);
+            if cmax == 1 {
+                let byte = bus.mem_read(src, false);
+                println!("**** DMAC transferring byte {:02x} from {:5x} to {:5x}", byte, src, dst);
+            } else {
+                println!("**** DMAC transferring {:4x} bytes from {:5x} to {:5x}", cmax, src, dst);
+            }
+            */
             loop {
                 let byte = bus.mem_read(src, false);
                 bus.mem_write(dst, byte);
