@@ -78,14 +78,20 @@ fn main() -> Result<(), std::io::Error> {
     cpu.reset();
 
     let mut input = "(ident \"a\tstring\" $id2* #f #\\#) ... , ,foo ,@ ;45 \n\
-                    comment-ok 32767 -32768 #d33 #x4f #b0011_1100"
+                    comment-ok #b0011_1100 32767 -32768 -10 #d33 #x4f #x01_ff"
         .chars();
+
+    let mut last_input = '-';
 
     loop {
         let pc = cpu.reg(Register::PC);
         if pc == 0x10e {
-            cpu.write_reg(Register::A, input.next().unwrap_or('\x1a') as u16);
+            last_input = input.next().unwrap_or('\x1a');
+            cpu.write_reg(Register::A, last_input as u16);
         }
+        //if pc >= 0x467 && pc <= 0x4a5 {
+        //print_cpu(&mut cpu, &mut bus);
+        //}
         if pc == 0x10f {
             let tok = cpu.reg(Register::A);
             match tok {
@@ -95,7 +101,7 @@ fn main() -> Result<(), std::io::Error> {
                 }
                 2 => print!("TRUE"),
                 3 => print!("FALSE"),
-                4 => print!("NUM=??"),
+                4 => print!("NUM={}", cpu.reg(Register::HL) as i16),
                 5 => print!("CHAR={}", (cpu.reg(Register::L) as u8) as char),
                 6 => {
                     print!("STRING=\"");
@@ -120,7 +126,7 @@ fn main() -> Result<(), std::io::Error> {
         }
         cpu.cycle(&mut bus);
     }
-    println!("HALT");
+    println!("HALT on input {}", last_input);
     print_cpu(&mut cpu, &mut bus);
 
     Ok(())

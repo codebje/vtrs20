@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::cmp::min;
+use std::path::Path;
 
 use crate::types::Peripheral;
 
@@ -28,7 +29,7 @@ impl RAM {
         data[..limit].copy_from_slice(&self.bytes.borrow()[(address - self.start) as usize..(limit + address as usize)]);
     }
 
-    pub fn load_file(&self, address: u32, filename: &str) -> Result<(), std::io::Error> {
+    pub fn load_file<P: AsRef<Path>>(&self, address: u32, filename: P) -> Result<(), std::io::Error> {
         let buffer = std::fs::read(filename)?;
         self.write(address, buffer.as_slice());
         Ok(())

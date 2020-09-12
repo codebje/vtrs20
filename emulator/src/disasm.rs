@@ -19,8 +19,8 @@ pub fn disasm(opcodes: &[u8]) -> String {
         0b00_001_111 => "rrca".to_string(),
 
         0b00_010_000 => format!("djnz\t{}", opcodes[1] as i8),
-        0b00_010_001 => format!("ld\tde,${:02x}{:02x}", opcodes[2], opcodes[1]),
-        0b00_010_010 => "ld\t(de),a".to_string(),
+        0b00_010_001 => format!("ld\tde, ${:02x}{:02x}", opcodes[2], opcodes[1]),
+        0b00_010_010 => "ld\t(de), a".to_string(),
         0b00_010_011 => "inc\tde".to_string(),
         0b00_010_100 => "inc\td".to_string(),
         0b00_010_101 => "dec\td".to_string(),
@@ -323,6 +323,11 @@ fn extended(opcodes: &[u8]) -> String {
 
         0b01_000_100 => "neg".to_string(),
 
+        0b01_000_010 => "sbc\thl, bc".to_string(),
+        0b01_010_010 => "sbc\thl, de".to_string(),
+        0b01_100_010 => "sbc\thl, hl".to_string(),
+        0b01_110_010 => "sbc\thl, sp".to_string(),
+
         0b01_000_011 => format!("ld\t(${:02x}{:02x}), bc", opcodes[2], opcodes[1]),
         0b01_010_011 => format!("ld\t(${:02x}{:02x}), de", opcodes[2], opcodes[1]),
 
@@ -460,9 +465,9 @@ fn index(opcodes: &[u8], reg: &str) -> String {
         0b00_100_011 => format!("inc\t{}", reg),
         0b00_101_011 => format!("dec\t{}", reg),
 
-        0b00_100_001 => format!("ld\t{}, ${:02x}{:02x}", reg, opcodes[1], opcodes[2]),
-        0b00_100_010 => format!("ld\t(${:02x}{:02x}), {}", opcodes[1], opcodes[2], reg),
-        0b00_101_010 => format!("ld\t{}, (${:02x}{:02x})", reg, opcodes[1], opcodes[2]),
+        0b00_100_001 => format!("ld\t{}, ${:02x}{:02x}", reg, opcodes[2], opcodes[1]),
+        0b00_100_010 => format!("ld\t(${:02x}{:02x}), {}", opcodes[2], opcodes[1], reg),
+        0b00_101_010 => format!("ld\t{}, (${:02x}{:02x})", reg, opcodes[2], opcodes[1]),
 
         0b00_110_100 => format!("inc\t({}+{})", reg, opcodes[1]),
         0b00_110_101 => format!("dec\t({}+{})", reg, opcodes[1]),
@@ -474,6 +479,14 @@ fn index(opcodes: &[u8], reg: &str) -> String {
         0b01_100_110 => format!("ld\th, ({}+{})", reg, opcodes[1]),
         0b01_101_110 => format!("ld\tl, ({}+{})", reg, opcodes[1]),
         0b01_111_110 => format!("ld\ta, ({}+{})", reg, opcodes[1]),
+
+        0b01_110_000 => format!("ld\t({}+{}), b", reg, opcodes[1]),
+        0b01_110_001 => format!("ld\t({}+{}), c", reg, opcodes[1]),
+        0b01_110_010 => format!("ld\t({}+{}), d", reg, opcodes[1]),
+        0b01_110_011 => format!("ld\t({}+{}), e", reg, opcodes[1]),
+        0b01_110_100 => format!("ld\t({}+{}), h", reg, opcodes[1]),
+        0b01_110_101 => format!("ld\t({}+{}), l", reg, opcodes[1]),
+        0b01_110_111 => format!("ld\t({}+{}), a", reg, opcodes[1]),
 
         0b11_001_011 => index_bits(&opcodes[1..], reg),
 
