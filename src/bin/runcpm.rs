@@ -578,11 +578,11 @@ fn main() -> Result<(), std::io::Error> {
         ],
     );
 
-    // disk parameters at 0xfa00
+    // disk parameters at 0xf633
     ram.write(
-        0xfa00,
+        0xf633,
         &[
-            0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0xfb, 0x10, 0xfa, 0, 0, 0x80, 0xfb, // DPH
+            0, 0, 0, 0, 0, 0, 0, 0, 0x83, 0xf8, 0x43, 0xf6, 0, 0, 0x30, 0xf9, // DPH
             16, 0, 4, 15, 1, 191, 0, 127, 0, 0b11000000, 0, 0, 0, 0, 0, // DPB
         ],
     );
@@ -639,7 +639,7 @@ fn main() -> Result<(), std::io::Error> {
                 // warm boot
                 ram.write(0, &[0xc3, 0x03, 0xf6, 0x00, 0x00, 0xc3, 0x06, 0xe8]);
                 cpu.write_reg(Register::C, 0);
-                cpu.write_reg(Register::PC, 0xe101);
+                cpu.write_reg(Register::PC, 0xe000);
             }
             0xf606 => {
                 // console status
@@ -647,6 +647,7 @@ fn main() -> Result<(), std::io::Error> {
                     input = input_ch.try_recv().ok();
                 }
                 cpu.write_reg(Register::A, if input.is_none() { 0x00 } else { 0xff });
+                ram.write(0xf606, &[0xc9]);
             }
             0xf609 => {
                 // console in
@@ -655,46 +656,56 @@ fn main() -> Result<(), std::io::Error> {
                 }
                 cpu.write_reg(Register::A, input.unwrap_or('\0') as u16);
                 input = None;
+                ram.write(0xf609, &[0xc9]);
             }
             0xf60c => {
                 // console out
                 write!(stdout, "{}", (cpu.reg(Register::C) as u8 & 0x7f) as char)?;
+                ram.write(0xf60c, &[0xc9]);
             }
             0xf60f => {} // list out
             0xf612 => {} // punch out
             0xf615 => {
                 // reader in
                 cpu.write_reg(Register::A, 0x1a);
+                ram.write(0xf615, &[0xc9]);
             }
             0xf618 => {
                 // home disk
                 track = 0;
+                ram.write(0xf618, &[0xc9]);
             }
             0xf61b => {
                 // select disk
                 let disk = cpu.reg(Register::C);
-                cpu.write_reg(Register::HL, if disk == 0 { 0xfa00 } else { 0 });
+                cpu.write_reg(Register::HL, if disk == 0 { 0xf633 } else { 0 });
+                ram.write(0xf61b, &[0xc9]);
             }
             0xf61e => {
                 // select track
                 track = cpu.reg(Register::BC);
+                ram.write(0xf61e, &[0xc9]);
             }
             0xf621 => {
                 // select sector
                 sector = cpu.reg(Register::BC);
+                ram.write(0xf621, &[0xc9]);
             }
             0xf624 => {
                 // set dma address
                 dma = cpu.reg(Register::BC);
+                ram.write(0xf624, &[0xc9]);
             }
             0xf627 => {
                 // read 128 bytes
                 let offset = ((track as u32) * 16 + (sector as u32)) * 128 + 0x20000;
+                println!("DISK READ: track {}, sector {}, offset={:05x}", track, sector, offset);
                 let mut buf = Vec::with_capacity(128);
                 buf.resize(128, 0);
                 ram.read(offset, &mut buf);
                 ram.write(dma as u32, &buf);
                 cpu.write_reg(Register::A, 0);
+                ram.write(0xf627, &[0xc9]);
             }
             0xf62a => {
                 // write 128 bytes
@@ -704,27 +715,30 @@ fn main() -> Result<(), std::io::Error> {
                 ram.read(dma as u32, &mut buf);
                 ram.write(offset, &buf);
                 cpu.write_reg(Register::A, 0);
+                ram.write(0xf62a, &[0xc9]);
             }
             0xf62d => {
                 // list status
                 cpu.write_reg(Register::A, 0);
+                ram.write(0xf62d, &[0xc9]);
             }
             0xf630 => {
                 // sector translate
                 cpu.write_reg(Register::HL, cpu.reg(Register::BC));
+                ram.write(0xf630, &[0xc9]);
             }
             _ => (),
         }
-        if pc >= 0x100 && pc <= 0x700 {
-            print_cpu(&mut cpu, &mut bus);
+        if (pc >= 0x100 && pc <= 0xb00) || pc >= 0xe000 || pc == 0x0005 {
+            //print_cpu(&mut cpu, &mut bus);
         }
         if cpu.mode != Mode::OpCodeFetch {
             break;
         }
         cpu.cycle(&mut bus);
     }
-    dump_mem(&ram, 0x7d0);
-    dump_mem(&ram, 0xe3e0);
+    //dump_mem(&ram, 0x920);
+    //dump_mem(&ram, 0xe3e0);
 
     Ok(())
 }

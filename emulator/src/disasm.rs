@@ -29,7 +29,7 @@ pub fn disasm(opcodes: &[u8]) -> String {
 
         0b00_011_000 => format!("jr\t{}", opcodes[1] as i8),
         0b00_011_001 => "add\thl, de".to_string(),
-        0b00_011_010 => "ld\t(de), a".to_string(),
+        0b00_011_010 => "ld\ta, (de)".to_string(),
         0b00_011_011 => "dec\tde".to_string(),
         0b00_011_100 => "inc\te".to_string(),
         0b00_011_101 => "dec\te".to_string(),
