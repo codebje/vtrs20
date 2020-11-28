@@ -374,7 +374,7 @@ impl CPU {
             0b01_100_111 => self.rrd(bus),
             0b01_101_111 => self.rld(bus),
 
-            0b10_100_000 => self.ldi(bus, Direction::Increment, true),
+            0b10_100_000 => self.ldi(bus, Direction::Increment, false),
             0b10_110_000 => self.ldi(bus, Direction::Increment, true),
 
             0b10_100_001 => self.cpi(bus, Direction::Increment, false),
