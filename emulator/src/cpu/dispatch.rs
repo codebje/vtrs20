@@ -353,6 +353,9 @@ impl CPU {
             0b01_000_111 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Direct(Register::I)),
             0b01_001_111 => self.ld_8(bus, Operand::Direct(Register::A), Operand::Direct(Register::R)),
 
+            0b01_010_111 => self.ld_8(bus, Operand::Direct(Register::I), Operand::Direct(Register::A)),
+            0b01_011_111 => self.ld_8(bus, Operand::Direct(Register::R), Operand::Direct(Register::A)),
+
             0b01_000_010 => self.sub_hl_ww(RegW::BC, true),
             0b01_010_010 => self.sub_hl_ww(RegW::DE, true),
             0b01_100_010 => self.sub_hl_ww(RegW::HL, true),
