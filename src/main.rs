@@ -10,6 +10,7 @@ use emulator::dma::*;
 use emulator::prt::*;
 use emulator::ram::*;
 use emulator::rom::*;
+use emulator::sdcard::*;
 
 fn print_cpu(cpu: &mut CPU, bus: &mut Bus) {
     let mut opcodes: [u8; 4] = [0, 0, 0, 0];
@@ -35,6 +36,29 @@ fn print_cpu(cpu: &mut CPU, bus: &mut Bus) {
         if flags & 0b0000_0001 != 0 { 'C' } else { 'c' },
         emulator::disasm::disasm(&opcodes),
     );
+}
+
+fn print_bios_call(cpu: &mut CPU, _bus: &mut Bus, pc: u16) {
+    match pc {
+        0xf600 => println!("BIOS_REBOOT"),
+        0xf603 => println!("BIOS_WBOOT"),
+        0xf606 => {} // console status, who cares
+        0xf609 => {} // console in
+        0xf60c => {} // console out
+        0xf60f => {} // list out
+        0xf612 => {} // punch out
+        0xf615 => {} // reader out
+        0xf618 => println!("BIOS_HOME"),
+        0xf61b => println!("BIOS_SELDSK({})", cpu.reg(Register::C)),
+        0xf61e => println!("BIOS_SETTRK({})", cpu.reg(Register::BC)),
+        0xf621 => println!("BIOS_SETSEC({})", cpu.reg(Register::BC)),
+        0xf624 => println!("BIOS_SETDMA({:04x})", cpu.reg(Register::BC)),
+        0xf627 => println!("BIOS_READ"),
+        0xf62a => println!("BIOS_WRITE"),
+        0xf62d => {} // list status
+        0xf630 => println!("BIOS_SECTRN({}, {})", cpu.reg(Register::BC), cpu.reg(Register::DE)),
+        _ => {}
+    }
 }
 
 fn main() -> Result<(), std::io::Error> {
@@ -67,6 +91,9 @@ fn main() -> Result<(), std::io::Error> {
     let dma = Rc::new(DMA::new());
     bus.add(dma);
 
+    let sdcard = Rc::new(SDCard::new());
+    bus.add(sdcard);
+
     match matches.value_of("tty") {
         Some(tty) => {
             let uart = ASCI::new(Channel::CH0, tty);
@@ -86,43 +113,35 @@ fn main() -> Result<(), std::io::Error> {
     //
     // consider reading .lst file with symtab
 
-    let mut bkpt = 0xfff0;
     let mut tracing = false;
+    let mut booted = false;
     loop {
         let pc = cpu.reg(Register::PC);
-        if pc == 0x251 {
+        if pc == 0x101 && booted {
             tracing = true;
 
             let delay = time::Duration::from_millis(100);
             thread::sleep(delay);
-            bkpt = 0xe000;
         }
         if tracing {
             print_cpu(&mut cpu, &mut bus);
             let one_ms = time::Duration::from_millis(1);
             thread::sleep(one_ms);
         }
-        if pc == 0xe000 {
-            for row in 0..15 {
-                let mut data: [u8; 16] = [0; 16];
-                ram.read(0xfa00 + (row * 16), &mut data);
-                print!("{:05x}  ", 0xfa00 + (row * 16));
-                for byte in 0..7 {
-                    print!("{:02x} ", data[byte]);
-                }
-                print!(" ");
-                for byte in 8..15 {
-                    print!("{:02x} ", data[byte]);
-                }
-                println!("");
-            }
-        }
-        if pc == 0xf7a1 {
-            print_cpu(&mut cpu, &mut bus);
-        }
-        if pc == bkpt {
-            bkpt = 0xfff0;
+        if pc == 0xf600 {
+            println!("BIOS has booted");
+            booted = true;
             tracing = false;
+        }
+        if pc == 0xf603 {
+            println!("BIOS has warm booted");
+        }
+        if pc >= 0xf979 && pc < 0xf9f5 {
+            //print_cpu(&mut cpu, &mut bus);
+        }
+        // print BIOS calls
+        if pc >= 0xF600 && pc < 0xF633 && false {
+            print_bios_call(&mut cpu, &mut bus, pc);
         }
         if cpu.mode != Mode::OpCodeFetch {
             break;

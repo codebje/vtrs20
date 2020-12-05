@@ -10,4 +10,5 @@ pub mod dma;
 pub mod prt;
 pub mod ram;
 pub mod rom;
+pub mod sdcard;
 pub mod types;
